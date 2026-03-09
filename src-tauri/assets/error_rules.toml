@@ -6,7 +6,7 @@
 id = "npm_eacces"
 pattern = "EACCES: permission denied"
 description = "npm 安装时权限不足"
-category = "PermissionDenied"
+category = "permissionDenied"
 
 [[rules.suggestions]]
 title = "修复 npm 全局目录权限"
@@ -29,14 +29,14 @@ args = ["npm", "install", "-g"]
 id = "network_timeout"
 pattern = "(ETIMEDOUT|ENOTFOUND|getaddrinfo|network timeout|timed out)"
 description = "网络连接超时或 DNS 解析失败"
-category = "NetworkError"
+category = "networkError"
 
 [[rules.suggestions]]
 title = "重试该步骤"
 description = "网络问题通常是临时性的，稍后重试即可。"
 [rules.suggestions.action]
 type = "retryStep"
-stepId = "__current__"
+step_id = "__current__"
 
 [[rules.suggestions]]
 title = "配置 npm 代理"
@@ -52,7 +52,7 @@ args = ["config", "set", "proxy", "http://127.0.0.1:7890"]
 id = "node_missing"
 pattern = "(node: command not found|'node' is not recognized|Cannot find module)"
 description = "Node.js 未安装或不在 PATH 中"
-category = "MissingDependency"
+category = "missingDependency"
 
 [[rules.suggestions]]
 title = "安装 Node.js"
@@ -75,7 +75,7 @@ args = ["install", "node"]
 id = "git_missing"
 pattern = "(git: command not found|'git' is not recognized)"
 description = "Git 未安装或不在 PATH 中"
-category = "MissingDependency"
+category = "missingDependency"
 
 [[rules.suggestions]]
 title = "安装 Git"
@@ -98,7 +98,7 @@ args = ["install", "git"]
 id = "disk_full"
 pattern = "(ENOSPC|No space left on device|disk full)"
 description = "磁盘空间不足"
-category = "DiskSpace"
+category = "diskSpace"
 
 [[rules.suggestions]]
 title = "清理磁盘空间"
@@ -113,7 +113,7 @@ url = "https://support.apple.com/en-us/HT206996"
 id = "npm_version_conflict"
 pattern = "(ERESOLVE|peer dep|incompatible|version.*required)"
 description = "npm 包版本冲突"
-category = "VersionConflict"
+category = "versionConflict"
 
 [[rules.suggestions]]
 title = "强制解决依赖冲突"
@@ -137,11 +137,11 @@ args = ["install", "--legacy-peer-deps"]
 id = "command_timeout"
 pattern = "(timeout|Timeout|timed out after)"
 description = "命令执行超时"
-category = "Timeout"
+category = "timeout"
 
 [[rules.suggestions]]
 title = "重试该步骤"
 description = "临时超时，稍后重试通常可以解决。"
 [rules.suggestions.action]
 type = "retryStep"
-stepId = "__current__"
+step_id = "__current__"

@@ -1,5 +1,8 @@
 pub mod engine;
 
+#[cfg(test)]
+mod engine_test;
+
 use serde::Serialize;
 
 #[derive(Debug, thiserror::Error)]
