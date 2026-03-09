@@ -20,10 +20,15 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         // Default plugin directory: alongside the executable in a `plugins/` folder.
+        // Falls back to a relative `plugins/` path if the executable path
+        // cannot be determined (unlikely in practice).
         let plugin_dir = std::env::current_exe()
             .ok()
             .and_then(|p| p.parent().map(|d| d.join("plugins")))
-            .unwrap_or_else(|| std::path::PathBuf::from("plugins"));
+            .unwrap_or_else(|| {
+                eprintln!("[AppState] Could not determine exe path, using relative plugins/");
+                std::path::PathBuf::from("plugins")
+            });
 
         let mut plugin_mgr = PluginManager::new(plugin_dir);
         // Best-effort scan at startup.

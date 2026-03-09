@@ -83,14 +83,27 @@ impl RecipeRegistry {
     // Phase-4 additions
     // -----------------------------------------------------------------------
 
+    /// Maximum response body size for remote recipe fetch (1 MB).
+    const MAX_BODY: usize = 1_024 * 1_024;
+
     /// Fetch a recipe from a remote URL (must return TOML).
     pub async fn fetch_from_url(&mut self, url: &str) -> Result<Recipe, AppError> {
-        let body = reqwest::get(url)
+        let resp = reqwest::get(url)
             .await
-            .map_err(|e| AppError::Anyhow(anyhow::anyhow!("HTTP fetch failed: {e}")))?
+            .map_err(|e| AppError::Anyhow(anyhow::anyhow!("HTTP fetch failed: {e}")))?;
+
+        if resp.content_length().unwrap_or(0) as usize > Self::MAX_BODY {
+            return Err(AppError::Anyhow(anyhow::anyhow!("response too large")));
+        }
+
+        let body = resp
             .text()
             .await
             .map_err(|e| AppError::Anyhow(anyhow::anyhow!("failed to read body: {e}")))?;
+
+        if body.len() > Self::MAX_BODY {
+            return Err(AppError::Anyhow(anyhow::anyhow!("response body too large")));
+        }
 
         let recipe = parser::parse_toml(&body)?;
         self.recipes.insert(recipe.id.clone(), recipe.clone());
@@ -148,7 +161,7 @@ impl RecipeRegistry {
                         }
                     }
                 }
-                let _ = &dir_clone; // keep reference alive
+                    let _ = &dir_clone;
             })
             .map_err(|e| AppError::Anyhow(anyhow::anyhow!("watcher error: {e}")))?;
 
