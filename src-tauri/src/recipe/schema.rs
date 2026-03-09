@@ -203,6 +203,8 @@ pub fn validate_recipe(recipe: &Recipe) -> Vec<ValidationIssue> {
 
     // Ensure step IDs are unique.
     let mut seen_ids = std::collections::HashSet::new();
+    let known_ids: std::collections::HashSet<&str> =
+        recipe.steps.iter().map(|step| step.id.as_str()).collect();
     for (idx, step) in recipe.steps.iter().enumerate() {
         if step.id.is_empty() {
             issues.push(ValidationIssue {
@@ -233,7 +235,7 @@ pub fn validate_recipe(recipe: &Recipe) -> Vec<ValidationIssue> {
                     message: "step cannot depend on itself".into(),
                     severity: IssueSeverity::Error,
                 });
-            } else if !recipe.steps.iter().any(|candidate| candidate.id == *dep_id) {
+            } else if !known_ids.contains(dep_id.as_str()) {
                 issues.push(ValidationIssue {
                     field: format!("steps[{idx}].dependsOn"),
                     message: format!("unknown dependency step id: {dep_id}"),

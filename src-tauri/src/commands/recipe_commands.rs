@@ -83,33 +83,38 @@ pub async fn fetch_recipe_url(state: State<'_, AppState>, url: String) -> Result
         .build()
         .map_err(|e| AppError::Anyhow(anyhow::anyhow!("failed to build HTTP client: {e}")))?;
 
-    let resp = client
+    let mut resp = client
         .get(parsed)
         .send()
         .await
         .and_then(reqwest::Response::error_for_status)
         .map_err(|e| AppError::Anyhow(anyhow::anyhow!("HTTP fetch failed: {e}")))?;
 
-    let content_length = resp.content_length().ok_or_else(|| {
-        AppError::Anyhow(anyhow::anyhow!("response missing Content-Length header"))
-    })? as usize;
-    if content_length > MAX_RECIPE_BODY_SIZE {
+    if resp
+        .content_length()
+        .is_some_and(|content_length| content_length as usize > MAX_RECIPE_BODY_SIZE)
+    {
         return Err(AppError::Anyhow(anyhow::anyhow!(
-            "response too large ({content_length} bytes, max {MAX_RECIPE_BODY_SIZE})"
+            "response too large (max {MAX_RECIPE_BODY_SIZE} bytes)"
         )));
     }
 
-    let body = resp
-        .text()
+    let mut body = Vec::new();
+    while let Some(chunk) = resp
+        .chunk()
         .await
-        .map_err(|e| AppError::Anyhow(anyhow::anyhow!("failed to read body: {e}")))?;
-
-    if body.len() > MAX_RECIPE_BODY_SIZE {
-        return Err(AppError::Anyhow(anyhow::anyhow!(
-            "response body too large ({} bytes, max {MAX_RECIPE_BODY_SIZE})",
-            body.len()
-        )));
+        .map_err(|e| AppError::Anyhow(anyhow::anyhow!("failed to read body: {e}")))?
+    {
+        if body.len() + chunk.len() > MAX_RECIPE_BODY_SIZE {
+            return Err(AppError::Anyhow(anyhow::anyhow!(
+                "response body too large (max {MAX_RECIPE_BODY_SIZE} bytes)"
+            )));
+        }
+        body.extend_from_slice(&chunk);
     }
+
+    let body = String::from_utf8(body)
+        .map_err(|e| AppError::Anyhow(anyhow::anyhow!("response body is not valid UTF-8: {e}")))?;
 
     let recipe = crate::recipe::parser::parse_toml(&body)?;
 

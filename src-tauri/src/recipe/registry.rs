@@ -109,29 +109,35 @@ impl RecipeRegistry {
             .build()
             .map_err(|e| AppError::Anyhow(anyhow::anyhow!("failed to build HTTP client: {e}")))?;
 
-        let resp = client
+        let mut resp = client
             .get(parsed)
             .send()
             .await
             .and_then(reqwest::Response::error_for_status)
             .map_err(|e| AppError::Anyhow(anyhow::anyhow!("HTTP fetch failed: {e}")))?;
 
-        let content_length = resp.content_length().ok_or_else(|| {
-            AppError::Anyhow(anyhow::anyhow!("response missing Content-Length header"))
-        })? as usize;
-
-        if content_length > Self::MAX_BODY {
+        if resp
+            .content_length()
+            .is_some_and(|content_length| content_length as usize > Self::MAX_BODY)
+        {
             return Err(AppError::Anyhow(anyhow::anyhow!("response too large")));
         }
 
-        let body = resp
-            .text()
+        let mut body = Vec::new();
+        while let Some(chunk) = resp
+            .chunk()
             .await
-            .map_err(|e| AppError::Anyhow(anyhow::anyhow!("failed to read body: {e}")))?;
-
-        if body.len() > Self::MAX_BODY {
-            return Err(AppError::Anyhow(anyhow::anyhow!("response body too large")));
+            .map_err(|e| AppError::Anyhow(anyhow::anyhow!("failed to read body: {e}")))?
+        {
+            if body.len() + chunk.len() > Self::MAX_BODY {
+                return Err(AppError::Anyhow(anyhow::anyhow!("response body too large")));
+            }
+            body.extend_from_slice(&chunk);
         }
+
+        let body = String::from_utf8(body).map_err(|e| {
+            AppError::Anyhow(anyhow::anyhow!("response body is not valid UTF-8: {e}"))
+        })?;
 
         let recipe = parser::parse_toml(&body)?;
         self.recipes.insert(recipe.id.clone(), recipe.clone());
@@ -174,14 +180,11 @@ impl RecipeRegistry {
     ) -> Result<(), AppError> {
         self.local_dir = Some(dir.clone());
 
-        let dir_clone = dir.clone();
         let mut watcher =
             notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
                 if let Ok(event) = res {
                     for path in &event.paths {
-                        if path.starts_with(&dir_clone)
-                            && path.extension().and_then(|e| e.to_str()) == Some("toml")
-                        {
+                        if path.extension().and_then(|e| e.to_str()) == Some("toml") {
                             let file_stem = path
                                 .file_stem()
                                 .unwrap_or_default()

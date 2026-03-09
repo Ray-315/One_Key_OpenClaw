@@ -13,7 +13,7 @@ fn validate_parsed_recipe(recipe: Recipe, path: &str) -> Result<Recipe, AppError
     } else {
         Err(AppError::RecipeParseError {
             path: path.into(),
-            message: errors.join("; "),
+            message: errors.join("\n"),
         })
     }
 }

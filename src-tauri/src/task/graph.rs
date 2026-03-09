@@ -82,7 +82,7 @@ impl TaskGraph {
     /// Return step IDs in a valid topological order.
     pub fn topological_order(&self) -> Vec<String> {
         toposort(&self.graph, None)
-            .expect("task graph should remain acyclic after successful build")
+            .expect("topological sort failed: task graph contains a cycle. Check step dependencies for circular references")
             .into_iter()
             .map(|idx| self.graph[idx].clone())
             .collect()

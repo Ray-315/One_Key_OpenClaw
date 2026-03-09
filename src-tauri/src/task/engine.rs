@@ -424,7 +424,7 @@ async fn run_step(
         .retry
         .as_ref()
         .is_some_and(|retry| retry.max_attempts > 0)
-        && step.on_error != OnErrorStrategy::Fail;
+        && step.on_error == OnErrorStrategy::Retry;
 
     // Mark step Running.
     update_step(&app, &task_arc, &step_id, |s| {
