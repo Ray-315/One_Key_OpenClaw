@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { useRecipeStore } from "../store/recipeStore";
 import { useTaskStore } from "../store/taskStore";
 import { StepList } from "../components/task/StepList";
@@ -63,10 +63,20 @@ export function DeployPage() {
 
   const activeTask = activeTaskId ? tasks[activeTaskId] : null;
 
+  // Controlled recipe selection.
+  const [selectedRecipeId, setSelectedRecipeId] = useState<string>("");
+
   // Load recipes on mount.
   useEffect(() => {
     loadRecipes();
   }, [loadRecipes]);
+
+  // Default to first recipe once loaded.
+  useEffect(() => {
+    if (recipes.length > 0 && !selectedRecipeId) {
+      setSelectedRecipeId(recipes[0].id);
+    }
+  }, [recipes, selectedRecipeId]);
 
   // Subscribe to Tauri task events.
   const handleStatus = useCallback(
@@ -85,9 +95,6 @@ export function DeployPage() {
   useTauriEvent<TaskStatusEvent>("task://status", handleStatus);
   useTauriEvent<TaskProgressEvent>("task://progress", handleProgress);
   useTauriEvent<TaskStep>("task://step-update", handleStepUpdate);
-
-  // Default to first recipe.
-  const selectedRecipeId = activeTask?.recipeId ?? recipes[0]?.id ?? "";
 
   const handleStart = async () => {
     if (!selectedRecipeId) return;
@@ -117,9 +124,7 @@ export function DeployPage() {
             <select
               className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
               value={selectedRecipeId}
-              onChange={() => {
-                /* controlled via activeTask; just show */
-              }}
+              onChange={(e) => setSelectedRecipeId(e.target.value)}
               disabled={recipesLoading}
             >
               {recipes.length === 0 ? (

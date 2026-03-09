@@ -15,9 +15,9 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let registry = RecipeRegistry::default();
-        // Ignore errors loading built-in recipes at startup — the commands
-        // will surface the error if needed.
-        let _ = registry.load_builtin();
+        if let Err(e) = registry.load_builtin() {
+            eprintln!("[AppState] Failed to load built-in recipes: {e}");
+        }
         Self {
             env_cache: Mutex::new(Vec::new()),
             recipe_registry: registry,

@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -332,67 +330,7 @@ async fn execute_step(
 ) -> Result<i32, AppError> {
     match action {
         StepAction::Shell { command, args, env } => {
-            let mut cmd = tokio::process::Command::new(command);
-            cmd.args(args);
-            for (k, v) in env {
-                cmd.env(k, v);
-            }
-            cmd.stdout(std::process::Stdio::piped());
-            cmd.stderr(std::process::Stdio::piped());
-
-            let mut child = cmd.spawn().map_err(|e| AppError::StepExecutionError {
-                step_id: step_id.clone(),
-                exit_code: None,
-                stderr: e.to_string(),
-            })?;
-
-            // Stream stdout.
-            let app_stdout = app.clone();
-            let tid_stdout = task_id.clone();
-            let sid_stdout = step_id.clone();
-            if let Some(stdout) = child.stdout.take() {
-                tokio::spawn(async move {
-                    use tokio::io::AsyncBufReadExt;
-                    let mut lines = tokio::io::BufReader::new(stdout).lines();
-                    while let Ok(Some(line)) = lines.next_line().await {
-                        LogPipeline::log_step(
-                            &app_stdout,
-                            tid_stdout.clone(),
-                            Some(sid_stdout.clone()),
-                            LogLevel::Info,
-                            line,
-                        );
-                    }
-                });
-            }
-
-            // Stream stderr.
-            let app_stderr = app.clone();
-            let tid_stderr = task_id.clone();
-            let sid_stderr = step_id.clone();
-            if let Some(stderr) = child.stderr.take() {
-                tokio::spawn(async move {
-                    use tokio::io::AsyncBufReadExt;
-                    let mut lines = tokio::io::BufReader::new(stderr).lines();
-                    while let Ok(Some(line)) = lines.next_line().await {
-                        LogPipeline::log_step(
-                            &app_stderr,
-                            tid_stderr.clone(),
-                            Some(sid_stderr.clone()),
-                            LogLevel::Warn,
-                            line,
-                        );
-                    }
-                });
-            }
-
-            let status = child.wait().await.map_err(|e| AppError::StepExecutionError {
-                step_id: step_id.clone(),
-                exit_code: None,
-                stderr: e.to_string(),
-            })?;
-
-            Ok(status.code().unwrap_or(-1))
+            execute_shell(app, command, args, env, task_id, step_id).await
         }
 
         StepAction::EnvCheck { env_id } => {
@@ -421,7 +359,7 @@ async fn execute_step(
             }
         }
 
-        // PackageInstall, Download, Extract: system commands
+        // PackageInstall, Download, Extract: delegate to shell execution.
         StepAction::PackageInstall { manager, packages } => {
             let args = match manager.as_str() {
                 "npm" => {
@@ -445,31 +383,17 @@ async fn execute_step(
                     a
                 }
             };
-            let shell_action = StepAction::Shell {
-                command: manager.clone(),
-                args,
-                env: HashMap::new(),
-            };
-            Box::pin(execute_step(app, &shell_action, task_id, step_id)).await
+            execute_shell(app, manager, &args, &HashMap::new(), task_id, step_id).await
         }
 
         StepAction::Download { url, dest } => {
-            // Use curl as a portable download mechanism.
-            let shell_action = StepAction::Shell {
-                command: "curl".to_string(),
-                args: vec!["-L".to_string(), "-o".to_string(), dest.clone(), url.clone()],
-                env: HashMap::new(),
-            };
-            Box::pin(execute_step(app, &shell_action, task_id, step_id)).await
+            let args = vec!["-L".to_string(), "-o".to_string(), dest.clone(), url.clone()];
+            execute_shell(app, "curl", &args, &HashMap::new(), task_id, step_id).await
         }
 
         StepAction::Extract { src, dest } => {
-            let shell_action = StepAction::Shell {
-                command: "tar".to_string(),
-                args: vec!["-xzf".to_string(), src.clone(), "-C".to_string(), dest.clone()],
-                env: HashMap::new(),
-            };
-            Box::pin(execute_step(app, &shell_action, task_id, step_id)).await
+            let args = vec!["-xzf".to_string(), src.clone(), "-C".to_string(), dest.clone()];
+            execute_shell(app, "tar", &args, &HashMap::new(), task_id, step_id).await
         }
     }
 }
@@ -481,6 +405,76 @@ fn now_millis() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
+}
+
+/// Execute a shell command with the given args and env map, streaming stdout/stderr.
+async fn execute_shell(
+    app: &AppHandle,
+    command: &str,
+    args: &[String],
+    env: &HashMap<String, String>,
+    task_id: String,
+    step_id: String,
+) -> Result<i32, AppError> {
+    let mut cmd = tokio::process::Command::new(command);
+    cmd.args(args);
+    for (k, v) in env {
+        cmd.env(k, v);
+    }
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+
+    let mut child = cmd.spawn().map_err(|e| AppError::StepExecutionError {
+        step_id: step_id.clone(),
+        exit_code: None,
+        stderr: e.to_string(),
+    })?;
+
+    let app_stdout = app.clone();
+    let tid_stdout = task_id.clone();
+    let sid_stdout = step_id.clone();
+    if let Some(stdout) = child.stdout.take() {
+        tokio::spawn(async move {
+            use tokio::io::AsyncBufReadExt;
+            let mut lines = tokio::io::BufReader::new(stdout).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                LogPipeline::log_step(
+                    &app_stdout,
+                    tid_stdout.clone(),
+                    Some(sid_stdout.clone()),
+                    LogLevel::Info,
+                    line,
+                );
+            }
+        });
+    }
+
+    let app_stderr = app.clone();
+    let tid_stderr = task_id.clone();
+    let sid_stderr = step_id.clone();
+    if let Some(stderr) = child.stderr.take() {
+        tokio::spawn(async move {
+            use tokio::io::AsyncBufReadExt;
+            let mut lines = tokio::io::BufReader::new(stderr).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                LogPipeline::log_step(
+                    &app_stderr,
+                    tid_stderr.clone(),
+                    Some(sid_stderr.clone()),
+                    LogLevel::Warn,
+                    line,
+                );
+            }
+        });
+    }
+
+    let status = child.wait().await.map_err(|e| AppError::StepExecutionError {
+        step_id: step_id.clone(),
+        exit_code: None,
+        stderr: e.to_string(),
+    })?;
+
+    Ok(status.code().unwrap_or(-1))
 }
 
 // Extend LogPipeline with a step-aware helper.

@@ -123,8 +123,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   applyStepUpdate: (updatedStep) => {
     set((s) => {
-      // The step update payload mirrors TaskStep; taskId is inferred from activeTaskId.
-      const taskId = get().activeTaskId;
+      // taskId must be provided in the step update or via activeTaskId.
+      const taskId = s.activeTaskId;
       if (!taskId) return s;
       const task = s.tasks[taskId];
       if (!task) return s;
