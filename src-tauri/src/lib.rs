@@ -2,6 +2,7 @@ mod commands;
 mod env;
 mod error;
 mod log;
+mod plugin;
 mod recipe;
 mod state;
 mod task;
@@ -29,9 +30,15 @@ pub fn run() {
             commands::recipe_commands::validate_recipe_cmd,
             commands::recipe_commands::save_recipe,
             commands::recipe_commands::delete_recipe,
+            commands::recipe_commands::fetch_recipe_url,
             // error / diagnostics
             commands::error_commands::diagnose_step_error,
             commands::error_commands::get_recipe_graph,
+            // plugins
+            commands::plugin_commands::list_plugins,
+            commands::plugin_commands::load_plugin,
+            commands::plugin_commands::unload_plugin,
+            commands::plugin_commands::scan_plugins,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

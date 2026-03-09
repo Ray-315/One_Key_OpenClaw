@@ -62,3 +62,59 @@ pub fn delete_recipe(
         .map_err(|e| AppError::Anyhow(anyhow::anyhow!("lock poisoned: {e}")))?;
     registry.delete(&recipe_id)
 }
+
+/// Maximum response body size for remote recipe fetch (1 MB).
+const MAX_RECIPE_BODY_SIZE: usize = 1_024 * 1_024;
+
+/// Fetch a recipe from a remote URL and register it.
+#[tauri::command]
+pub async fn fetch_recipe_url(
+    state: State<'_, AppState>,
+    url: String,
+) -> Result<Recipe, AppError> {
+    // Validate URL scheme – only allow HTTPS (and HTTP for localhost).
+    let parsed = reqwest::Url::parse(&url)
+        .map_err(|e| AppError::Anyhow(anyhow::anyhow!("invalid URL: {e}")))?;
+    match parsed.scheme() {
+        "https" => {}
+        "http" if parsed.host_str().map_or(false, |h| h == "localhost" || h == "127.0.0.1") => {}
+        other => {
+            return Err(AppError::Anyhow(anyhow::anyhow!(
+                "unsupported URL scheme '{other}': only HTTPS is allowed"
+            )));
+        }
+    }
+
+    // Fetch with a size limit to prevent resource exhaustion.
+    let resp = reqwest::get(parsed)
+        .await
+        .map_err(|e| AppError::Anyhow(anyhow::anyhow!("HTTP fetch failed: {e}")))?;
+
+    let content_length = resp.content_length().unwrap_or(0) as usize;
+    if content_length > MAX_RECIPE_BODY_SIZE {
+        return Err(AppError::Anyhow(anyhow::anyhow!(
+            "response too large ({content_length} bytes, max {MAX_RECIPE_BODY_SIZE})"
+        )));
+    }
+
+    let body = resp
+        .text()
+        .await
+        .map_err(|e| AppError::Anyhow(anyhow::anyhow!("failed to read body: {e}")))?;
+
+    if body.len() > MAX_RECIPE_BODY_SIZE {
+        return Err(AppError::Anyhow(anyhow::anyhow!(
+            "response body too large ({} bytes, max {MAX_RECIPE_BODY_SIZE})",
+            body.len()
+        )));
+    }
+
+    let recipe = crate::recipe::parser::parse_toml(&body)?;
+
+    let mut registry = state
+        .recipes
+        .lock()
+        .map_err(|e| AppError::Anyhow(anyhow::anyhow!("lock poisoned: {e}")))?;
+    registry.save(recipe.clone());
+    Ok(recipe)
+}

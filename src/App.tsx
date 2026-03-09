@@ -5,6 +5,7 @@ import { LogPage } from "./pages/LogPage";
 import { DeployPage } from "./pages/DeployPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { TaskFlowPage } from "./pages/TaskFlowPage";
+import { RecipePage } from "./pages/RecipePage";
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/env" element={<EnvCheckPage />} />
           <Route path="/deploy" element={<DeployPage />} />
+          <Route path="/recipe" element={<RecipePage />} />
           <Route path="/flow" element={<TaskFlowPage />} />
           <Route path="/log" element={<LogPage />} />
         </Routes>

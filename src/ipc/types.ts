@@ -215,6 +215,31 @@ export interface TaskGraphData {
 }
 
 // ---------------------------------------------------------------------------
+// Plugin types (Phase 4)
+// ---------------------------------------------------------------------------
+
+export type PluginType =
+  | "recipe_provider"
+  | "env_probe"
+  | "step_executor"
+  | "error_rule"
+  | "log_sink";
+
+export interface PluginPermissions {
+  network: boolean;
+  filesystem: boolean;
+}
+
+export interface PluginInfo {
+  id: string;
+  name: string;
+  version: string;
+  author?: string;
+  types: PluginType[];
+  enabled: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // Event payloads (backend → frontend push)
 // ---------------------------------------------------------------------------
 

@@ -27,3 +27,8 @@ export async function saveRecipe(recipe: Recipe): Promise<void> {
 export async function deleteRecipe(recipeId: string): Promise<void> {
   return invoke("delete_recipe", { recipeId });
 }
+
+/** Fetch a recipe from a remote URL and register it. */
+export async function fetchRecipeUrl(url: string): Promise<Recipe> {
+  return invoke<Recipe>("fetch_recipe_url", { url });
+}
