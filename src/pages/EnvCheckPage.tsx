@@ -1,34 +1,36 @@
+import { useTranslation } from "react-i18next";
 import { useEnvProbe } from "../hooks/useEnvProbe";
 import { EnvGrid } from "../components/env/EnvGrid";
 
-const filterOptions = [
-  { value: "all" as const, label: "全部" },
-  { value: "ok" as const, label: "正常" },
-  { value: "missing" as const, label: "缺失" },
-  { value: "versionMismatch" as const, label: "版本不符" },
-];
-
 export function EnvCheckPage() {
+  const { t } = useTranslation();
   const { items, loading, error, filter, setFilter, probeAll, probeSingle } =
     useEnvProbe();
+
+  const filterOptions = [
+    { value: "all" as const, label: t("env.all") },
+    { value: "ok" as const, label: t("env.ok") },
+    { value: "missing" as const, label: t("env.missing") },
+    { value: "versionMismatch" as const, label: t("env.versionMismatch") },
+  ];
 
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-4">
-        <h2 className="text-lg font-bold">环境检测</h2>
+        <h2 className="text-lg font-bold">{t("env.title")}</h2>
         <button
           onClick={probeAll}
           disabled={loading}
           className="rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)] disabled:opacity-50"
         >
-          {loading ? "检测中..." : "全部重新检测"}
+          {loading ? t("env.probing") : t("env.probeAll")}
         </button>
       </div>
 
       {/* Filters */}
       <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-6 py-3">
-        <span className="text-sm text-[var(--color-text-muted)]">筛选:</span>
+        <span className="text-sm text-[var(--color-text-muted)]">{t("env.filter")}</span>
         {filterOptions.map((opt) => (
           <button
             key={opt.value}
@@ -57,7 +59,7 @@ export function EnvCheckPage() {
           <div className="flex items-center justify-center py-12">
             <div className="text-[var(--color-text-muted)]">
               <span className="mr-2 inline-block animate-spin">🔄</span>
-              正在检测环境...
+              {t("common.loading")}
             </div>
           </div>
         ) : (

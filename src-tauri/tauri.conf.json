@@ -31,5 +31,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/Ray-315/One_Key_OpenClaw/releases/latest/download/latest.json"
+      ],
+      "pubkey": ""
+    }
   }
 }
