@@ -16,10 +16,7 @@ pub fn list_plugins(state: State<'_, AppState>) -> Result<Vec<PluginInfo>, AppEr
 
 /// Load a plugin from a directory that contains a `plugin.toml`.
 #[tauri::command]
-pub fn load_plugin(
-    state: State<'_, AppState>,
-    path: String,
-) -> Result<PluginInfo, AppError> {
+pub fn load_plugin(state: State<'_, AppState>, path: String) -> Result<PluginInfo, AppError> {
     let mut mgr = state
         .plugins
         .lock()
@@ -30,10 +27,7 @@ pub fn load_plugin(
 
 /// Unload a plugin by its ID.
 #[tauri::command]
-pub fn unload_plugin(
-    state: State<'_, AppState>,
-    plugin_id: String,
-) -> Result<(), AppError> {
+pub fn unload_plugin(state: State<'_, AppState>, plugin_id: String) -> Result<(), AppError> {
     let mut mgr = state
         .plugins
         .lock()

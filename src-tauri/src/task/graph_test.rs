@@ -134,10 +134,7 @@ mod tests {
 
     #[test]
     fn to_graph_data_includes_all_nodes_and_edges() {
-        let steps = vec![
-            shell_step("a", vec![]),
-            shell_step("b", vec!["a"]),
-        ];
+        let steps = vec![shell_step("a", vec![]), shell_step("b", vec!["a"])];
         let graph = TaskGraph::build(&steps).unwrap();
         let data = graph.to_graph_data(&steps);
         assert_eq!(data.nodes.len(), 2);

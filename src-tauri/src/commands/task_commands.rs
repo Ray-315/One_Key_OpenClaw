@@ -27,8 +27,7 @@ pub async fn start_task(
     app: AppHandle,
     state: State<'_, AppState>,
     recipe_id: String,
-    #[allow(unused_variables)]
-    vars: HashMap<String, String>,
+    #[allow(unused_variables)] vars: HashMap<String, String>,
 ) -> Result<String, AppError> {
     // Look up the recipe.
     let recipe = {
@@ -39,7 +38,9 @@ pub async fn start_task(
         registry
             .get(&recipe_id)
             .cloned()
-            .ok_or_else(|| AppError::RecipeNotFound { recipe_id: recipe_id.clone() })?
+            .ok_or_else(|| AppError::RecipeNotFound {
+                recipe_id: recipe_id.clone(),
+            })?
     };
 
     let task_id = new_task_id();
@@ -100,28 +101,19 @@ pub async fn start_task(
 
 /// Pause a running task (takes effect after the current step finishes if mid-step).
 #[tauri::command]
-pub async fn pause_task(
-    state: State<'_, AppState>,
-    task_id: String,
-) -> Result<(), AppError> {
+pub async fn pause_task(state: State<'_, AppState>, task_id: String) -> Result<(), AppError> {
     send_control(&state, &task_id, TaskControl::Pause).await
 }
 
 /// Resume a paused task.
 #[tauri::command]
-pub async fn resume_task(
-    state: State<'_, AppState>,
-    task_id: String,
-) -> Result<(), AppError> {
+pub async fn resume_task(state: State<'_, AppState>, task_id: String) -> Result<(), AppError> {
     send_control(&state, &task_id, TaskControl::Resume).await
 }
 
 /// Cancel a running or paused task.
 #[tauri::command]
-pub async fn cancel_task(
-    state: State<'_, AppState>,
-    task_id: String,
-) -> Result<(), AppError> {
+pub async fn cancel_task(state: State<'_, AppState>, task_id: String) -> Result<(), AppError> {
     send_control(&state, &task_id, TaskControl::Cancel).await
 }
 
@@ -138,7 +130,9 @@ async fn send_control(
         controls
             .get(task_id)
             .cloned()
-            .ok_or_else(|| AppError::TaskNotFound { task_id: task_id.into() })?
+            .ok_or_else(|| AppError::TaskNotFound {
+                task_id: task_id.into(),
+            })?
     };
     tx.send(ctrl)
         .await
@@ -149,17 +143,14 @@ async fn send_control(
 
 /// Return a snapshot of a task by ID.
 #[tauri::command]
-pub fn get_task(
-    state: State<'_, AppState>,
-    task_id: String,
-) -> Result<Task, AppError> {
+pub fn get_task(state: State<'_, AppState>, task_id: String) -> Result<Task, AppError> {
     let tasks = state
         .tasks
         .lock()
         .map_err(|e| AppError::Anyhow(anyhow::anyhow!("lock poisoned: {e}")))?;
-    let arc = tasks
-        .get(&task_id)
-        .ok_or_else(|| AppError::TaskNotFound { task_id: task_id.clone() })?;
+    let arc = tasks.get(&task_id).ok_or_else(|| AppError::TaskNotFound {
+        task_id: task_id.clone(),
+    })?;
     let task = arc
         .lock()
         .map_err(|e| AppError::Anyhow(anyhow::anyhow!("task lock poisoned: {e}")))?

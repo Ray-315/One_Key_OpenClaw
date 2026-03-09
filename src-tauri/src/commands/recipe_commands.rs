@@ -69,7 +69,7 @@ pub async fn fetch_recipe_url(state: State<'_, AppState>, url: String) -> Result
         "http"
             if parsed
                 .host_str()
-                .map_or(false, |h| h == "localhost" || h == "127.0.0.1") => {}
+                .is_some_and(|h| h == "localhost" || h == "127.0.0.1") => {}
         other => {
             return Err(AppError::Anyhow(anyhow::anyhow!(
                 "unsupported URL scheme '{other}': only HTTPS is allowed"

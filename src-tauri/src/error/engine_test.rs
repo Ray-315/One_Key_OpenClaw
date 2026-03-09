@@ -8,7 +8,10 @@ mod tests {
         let report = engine.diagnose("t1", "s1", "some random error that matches nothing");
         assert_eq!(report.task_id, "t1");
         assert_eq!(report.step_id, "s1");
-        assert!(!report.suggestions.is_empty(), "should have fallback suggestion");
+        assert!(
+            !report.suggestions.is_empty(),
+            "should have fallback suggestion"
+        );
     }
 
     #[test]
@@ -19,7 +22,10 @@ mod tests {
             "install",
             "npm ERR! Error: EACCES: permission denied, mkdir '/usr/local/lib'",
         );
-        assert!(report.matched_rule.is_some(), "should match npm_eacces rule");
+        assert!(
+            report.matched_rule.is_some(),
+            "should match npm_eacces rule"
+        );
         let rule = report.matched_rule.unwrap();
         assert_eq!(rule.id, "npm_eacces");
     }
@@ -40,11 +46,7 @@ mod tests {
     #[test]
     fn diagnose_matches_node_missing() {
         let engine = ErrorDiagnosticEngine::with_builtins();
-        let report = engine.diagnose(
-            "task-1",
-            "build",
-            "sh: node: command not found",
-        );
+        let report = engine.diagnose("task-1", "build", "sh: node: command not found");
         assert!(report.matched_rule.is_some());
         let rule = report.matched_rule.unwrap();
         assert_eq!(rule.id, "node_missing");

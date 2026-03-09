@@ -21,11 +21,10 @@ pub struct ErrorDiagnosticEngine {
 impl ErrorDiagnosticEngine {
     /// Create an engine pre-loaded with the built-in error rules.
     pub fn with_builtins() -> Self {
-        let rules_file: RulesFile =
-            toml::from_str(BUILTIN_RULES_TOML).unwrap_or_else(|e| {
-                eprintln!("[ErrorDiagnosticEngine] Failed to parse built-in rules: {e}");
-                RulesFile { rules: Vec::new() }
-            });
+        let rules_file: RulesFile = toml::from_str(BUILTIN_RULES_TOML).unwrap_or_else(|e| {
+            eprintln!("[ErrorDiagnosticEngine] Failed to parse built-in rules: {e}");
+            RulesFile { rules: Vec::new() }
+        });
         Self {
             rules: rules_file.rules,
         }
