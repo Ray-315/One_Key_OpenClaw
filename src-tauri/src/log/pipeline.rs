@@ -65,4 +65,25 @@ impl LogPipeline {
         // Best-effort emit; ignore errors (e.g. no active window).
         let _ = app_handle.emit("log://entry", &entry);
     }
+
+    /// Create a step-scoped log entry and emit it via Tauri events.
+    pub fn log_step(
+        app_handle: &AppHandle,
+        level: LogLevel,
+        task_id: impl Into<String>,
+        step_id: impl Into<String>,
+        source: LogSource,
+        message: impl Into<String>,
+    ) {
+        let entry = LogEntry {
+            id: next_log_id(),
+            task_id: task_id.into(),
+            step_id: Some(step_id.into()),
+            level,
+            message: message.into(),
+            timestamp: now_millis(),
+            source,
+        };
+        let _ = app_handle.emit("log://entry", &entry);
+    }
 }
