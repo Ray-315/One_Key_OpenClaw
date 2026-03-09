@@ -94,7 +94,7 @@ fn substitute(s: &str, vars: &HashMap<String, String>) -> String {
         out = out.replace(&format!("${{{k}}}"), v);
     }
     // Expand a small set of OS env vars.
-    for name in &["HOME", "USERPROFILE", "APPDATA", "TEMP", "TMP", "PATH"] {
+    for name in &["HOME", "USERPROFILE", "APPDATA", "TEMP", "TMP"] {
         if let Ok(val) = std::env::var(name) {
             out = out.replace(&format!("${{{name}}}"), &val);
         }
@@ -129,7 +129,10 @@ fn substitute_step(step: &RecipeStep, vars: &HashMap<String, String>) -> RecipeS
             dest: dest.clone(),
         },
     };
-    RecipeStep { action, ..step.clone() }
+    RecipeStep {
+        action,
+        ..step.clone()
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -154,10 +157,7 @@ fn execute_action(
                 .stderr(Stdio::piped());
 
             match cmd.spawn() {
-                Err(e) => (
-                    None,
-                    Some(format!("Failed to spawn '{command}': {e}")),
-                ),
+                Err(e) => (None, Some(format!("Failed to spawn '{command}': {e}"))),
                 Ok(mut child) => {
                     // Stream stdout
                     if let Some(stdout) = child.stdout.take() {
@@ -167,7 +167,12 @@ fn execute_action(
                         std::thread::spawn(move || {
                             for line in BufReader::new(stdout).lines().map_while(Result::ok) {
                                 LogPipeline::log_step(
-                                    &app2, LogLevel::Info, &tid, &sid, LogSource::Stdout, &line,
+                                    &app2,
+                                    LogLevel::Info,
+                                    &tid,
+                                    &sid,
+                                    LogSource::Stdout,
+                                    &line,
                                 );
                             }
                         });
@@ -180,7 +185,12 @@ fn execute_action(
                         std::thread::spawn(move || {
                             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
                                 LogPipeline::log_step(
-                                    &app2, LogLevel::Warn, &tid, &sid, LogSource::Stderr, &line,
+                                    &app2,
+                                    LogLevel::Warn,
+                                    &tid,
+                                    &sid,
+                                    LogSource::Stderr,
+                                    &line,
                                 );
                             }
                         });
@@ -251,12 +261,14 @@ fn execute_action(
         }
 
         // -------------------------------------------------------------------
-        StepAction::Download { url, dest } => {
-            (Some(1), Some(format!("Download not yet supported: {url} → {dest:?}")))
-        }
-        StepAction::Extract { src, dest } => {
-            (Some(1), Some(format!("Extract not yet supported: {src:?} → {dest:?}")))
-        }
+        StepAction::Download { url, dest } => (
+            Some(1),
+            Some(format!("Download not yet supported: {url} → {dest:?}")),
+        ),
+        StepAction::Extract { src, dest } => (
+            Some(1),
+            Some(format!("Extract not yet supported: {src:?} → {dest:?}")),
+        ),
     }
 }
 
@@ -369,9 +381,7 @@ fn set_task_status(
             TaskStatus::Running if task.started_at.is_none() => {
                 task.started_at = Some(now_ms());
             }
-            TaskStatus::Success
-            | TaskStatus::Failed
-            | TaskStatus::Cancelled => {
+            TaskStatus::Success | TaskStatus::Failed | TaskStatus::Cancelled => {
                 task.finished_at = Some(now_ms());
             }
             _ => {}
@@ -410,7 +420,11 @@ async fn run_step(
 ) -> StepOutcome {
     let step_id = step.id.clone();
     let max_attempts = step.retry.as_ref().map(|r| r.max_attempts).unwrap_or(0);
-    let should_retry = step.on_error == OnErrorStrategy::Retry || step.retry.is_some();
+    let should_retry = step
+        .retry
+        .as_ref()
+        .is_some_and(|retry| retry.max_attempts > 0)
+        && step.on_error == OnErrorStrategy::Retry;
 
     // Mark step Running.
     update_step(&app, &task_arc, &step_id, |s| {
@@ -437,10 +451,11 @@ async fn run_step(
         let step_id_c = step_id.clone();
         let app_c = app.clone();
 
-        let (exit_code, error) =
-            tokio::task::spawn_blocking(move || execute_action(&action, &task_id_c, &step_id_c, &app_c))
-                .await
-                .unwrap_or_else(|_| (None, Some(format!("step '{}' task panicked", step_id))));
+        let (exit_code, error) = tokio::task::spawn_blocking(move || {
+            execute_action(&action, &task_id_c, &step_id_c, &app_c)
+        })
+        .await
+        .unwrap_or_else(|_| (None, Some(format!("step '{}' task panicked", step_id))));
 
         if error.is_none() {
             // Success
@@ -691,21 +706,22 @@ fn cancel_all_pending(
     completed: &HashSet<String>,
     running: &HashSet<String>,
 ) {
-    let ids: Vec<String> = {
-        let task = task_arc.lock().unwrap();
+    let cancelled_steps: Vec<TaskStep> = {
+        let mut task = task_arc.lock().unwrap();
         task.steps
-            .iter()
+            .iter_mut()
             .filter(|s| {
                 !completed.contains(&s.id)
                     && !running.contains(&s.id)
                     && matches!(s.status, StepStatus::Pending | StepStatus::Waiting)
             })
-            .map(|s| s.id.clone())
+            .map(|s| {
+                s.status = StepStatus::Cancelled;
+                s.clone()
+            })
             .collect()
     };
-    for id in ids {
-        update_step(app, task_arc, &id, |s| {
-            s.status = StepStatus::Cancelled;
-        });
+    for step in cancelled_steps {
+        let _ = app.emit("task://step-update", &step);
     }
 }

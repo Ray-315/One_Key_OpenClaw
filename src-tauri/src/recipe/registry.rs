@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use tokio::sync::mpsc;
@@ -88,22 +89,55 @@ impl RecipeRegistry {
 
     /// Fetch a recipe from a remote URL (must return TOML).
     pub async fn fetch_from_url(&mut self, url: &str) -> Result<Recipe, AppError> {
-        let resp = reqwest::get(url)
+        let parsed = reqwest::Url::parse(url)
+            .map_err(|e| AppError::Anyhow(anyhow::anyhow!("invalid URL: {e}")))?;
+        match parsed.scheme() {
+            "https" => {}
+            "http"
+                if parsed
+                    .host_str()
+                    .is_some_and(|h| h == "localhost" || h == "127.0.0.1") => {}
+            other => {
+                return Err(AppError::Anyhow(anyhow::anyhow!(
+                    "unsupported URL scheme '{other}': only HTTPS is allowed"
+                )));
+            }
+        }
+
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .map_err(|e| AppError::Anyhow(anyhow::anyhow!("failed to build HTTP client: {e}")))?;
+
+        let mut resp = client
+            .get(parsed)
+            .send()
             .await
+            .and_then(reqwest::Response::error_for_status)
             .map_err(|e| AppError::Anyhow(anyhow::anyhow!("HTTP fetch failed: {e}")))?;
 
-        if resp.content_length().unwrap_or(0) as usize > Self::MAX_BODY {
+        if resp
+            .content_length()
+            .is_some_and(|content_length| content_length as usize > Self::MAX_BODY)
+        {
             return Err(AppError::Anyhow(anyhow::anyhow!("response too large")));
         }
 
-        let body = resp
-            .text()
+        let mut body = Vec::new();
+        while let Some(chunk) = resp
+            .chunk()
             .await
-            .map_err(|e| AppError::Anyhow(anyhow::anyhow!("failed to read body: {e}")))?;
-
-        if body.len() > Self::MAX_BODY {
-            return Err(AppError::Anyhow(anyhow::anyhow!("response body too large")));
+            .map_err(|e| AppError::Anyhow(anyhow::anyhow!("failed to read body: {e}")))?
+        {
+            if body.len() + chunk.len() > Self::MAX_BODY {
+                return Err(AppError::Anyhow(anyhow::anyhow!("response body too large")));
+            }
+            body.extend_from_slice(&chunk);
         }
+
+        let body = String::from_utf8(body).map_err(|e| {
+            AppError::Anyhow(anyhow::anyhow!("response body is not valid UTF-8: {e}"))
+        })?;
 
         let recipe = parser::parse_toml(&body)?;
         self.recipes.insert(recipe.id.clone(), recipe.clone());
@@ -146,7 +180,6 @@ impl RecipeRegistry {
     ) -> Result<(), AppError> {
         self.local_dir = Some(dir.clone());
 
-        let dir_clone = dir.clone();
         let mut watcher =
             notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
                 if let Ok(event) = res {
@@ -161,7 +194,6 @@ impl RecipeRegistry {
                         }
                     }
                 }
-                    let _ = &dir_clone;
             })
             .map_err(|e| AppError::Anyhow(anyhow::anyhow!("watcher error: {e}")))?;
 
