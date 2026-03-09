@@ -3,7 +3,9 @@ import { test, expect } from "@playwright/test";
 test.describe("App Navigation", () => {
   test("should load dashboard page", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator("text=One Key OpenClaw")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "One Key OpenClaw" }),
+    ).toBeVisible();
   });
 
   test("sidebar navigation links are visible", async ({ page }) => {
