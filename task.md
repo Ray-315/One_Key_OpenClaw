@@ -1558,11 +1558,11 @@ One_Key_OpenClaw/
 
 ### Phase 4 — 插件与扩展
 
-- [ ] `PluginManager`：本地插件加载
-- [ ] 插件 API 规范文档
-- [ ] `RecipeRegistry`：热重载 + 远程拉取
-- [ ] 配方管理页面（RecipePage + RecipeEditor）
-- [ ] 配方市场原型（社区配方列表）
+- [x] `PluginManager`：本地插件加载
+- [x] 插件 API 规范文档
+- [x] `RecipeRegistry`：热重载 + 远程拉取
+- [x] 配方管理页面（RecipePage + RecipeEditor）
+- [x] 配方市场原型（社区配方列表）
 
 ### Phase 5 — 打磨与发布
 
