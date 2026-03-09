@@ -1,7 +1,7 @@
 use tauri::State;
 
-use crate::error::{AppError, DiagnosticReport};
 use crate::error::engine::ErrorDiagnosticEngine;
+use crate::error::{AppError, DiagnosticReport};
 use crate::state::AppState;
 use crate::task::graph::TaskGraphData;
 
@@ -32,7 +32,9 @@ pub fn get_recipe_graph(
 
     let recipe = registry
         .get(&recipe_id)
-        .ok_or_else(|| AppError::RecipeNotFound { recipe_id: recipe_id.clone() })?;
+        .ok_or_else(|| AppError::RecipeNotFound {
+            recipe_id: recipe_id.clone(),
+        })?;
 
     use crate::task::graph::TaskGraph;
     let graph = TaskGraph::build(&recipe.steps)?;

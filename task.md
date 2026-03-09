@@ -1530,31 +1530,31 @@ One_Key_OpenClaw/
 
 ### Phase 1 — 基础骨架（MVP）
 
-- [ ] 项目初始化：`pnpm create tauri-app`（Tauri 2 + React + TypeScript）
-- [ ] TailwindCSS + Radix UI 集成
-- [ ] Zustand 状态管理基础结构
-- [ ] `EnvProber`：检测 Node.js、Git、Python、Rust、Docker
-- [ ] 环境检测页面（EnvCheckPage）
-- [ ] Tauri 事件系统 + `LogPipeline` 基础版
-- [ ] 日志终端页面（LogPage + Xterm.js）
+- [x] 项目初始化：`pnpm create tauri-app`（Tauri 2 + React + TypeScript）
+- [x] TailwindCSS + Radix UI 集成
+- [x] Zustand 状态管理基础结构
+- [x] `EnvProber`：检测 Node.js、Git、Python、Rust、Docker
+- [x] 环境检测页面（EnvCheckPage）
+- [x] Tauri 事件系统 + `LogPipeline` 基础版
+- [x] 日志终端页面（LogPage + Xterm.js）
 
 ### Phase 2 — 配方与任务引擎
 
-- [ ] `RecipeParser`：TOML 配方解析与校验
-- [ ] `TaskExecutor`：串行步骤执行（无 DAG）
-- [ ] `TaskStateMachine`：状态转换 + 暂停/恢复/取消
-- [ ] 一键部署页面（DeployPage）
-- [ ] 分步骤进度展示（StepList）
-- [ ] 内置 OpenClaw 与 Claude Code 配方
+- [x] `RecipeParser`：TOML 配方解析与校验
+- [x] `TaskExecutor`：串行步骤执行（无 DAG）
+- [x] `TaskStateMachine`：状态转换 + 暂停/恢复/取消
+- [x] 一键部署页面（DeployPage）
+- [x] 分步骤进度展示（StepList）
+- [x] 内置 OpenClaw 与 Claude Code 配方
 
 ### Phase 3 — 高级编排与错误处理
 
-- [ ] DAG 任务图（petgraph）：并行步骤支持
-- [ ] 任务编排可视化页面（TaskFlowPage + React Flow）
-- [ ] `ErrorDiagnosticEngine`：规则匹配 + 修复建议
-- [ ] 错误诊断面板（ErrorAlert + FixSuggestion 列表）
-- [ ] 步骤级重试（RetryConfig）
-- [ ] 仪表板页面（DashboardPage）
+- [x] DAG 任务图（petgraph）：并行步骤支持
+- [x] 任务编排可视化页面（TaskFlowPage + React Flow）
+- [x] `ErrorDiagnosticEngine`：规则匹配 + 修复建议
+- [x] 错误诊断面板（ErrorAlert + FixSuggestion 列表）
+- [x] 步骤级重试（RetryConfig）
+- [x] 仪表板页面（DashboardPage）
 
 ### Phase 4 — 插件与扩展
 

@@ -9,14 +9,11 @@ use crate::state::AppState;
 pub fn probe_all_envs(state: State<'_, AppState>) -> Result<Vec<EnvItem>, AppError> {
     let items = EnvProber::probe_all();
 
-    let mut cache = state
-        .env_cache
-        .lock()
-        .map_err(|e| {
-            AppError::Anyhow(anyhow::anyhow!(
-                "Failed to acquire environment cache lock (previous panic): {e}"
-            ))
-        })?;
+    let mut cache = state.env_cache.lock().map_err(|e| {
+        AppError::Anyhow(anyhow::anyhow!(
+            "Failed to acquire environment cache lock (previous panic): {e}"
+        ))
+    })?;
     *cache = items.clone();
 
     Ok(items)
@@ -27,14 +24,11 @@ pub fn probe_all_envs(state: State<'_, AppState>) -> Result<Vec<EnvItem>, AppErr
 pub fn probe_env(id: String, state: State<'_, AppState>) -> Result<EnvItem, AppError> {
     let item = EnvProber::probe(&id);
 
-    let mut cache = state
-        .env_cache
-        .lock()
-        .map_err(|e| {
-            AppError::Anyhow(anyhow::anyhow!(
-                "Failed to acquire environment cache lock (previous panic): {e}"
-            ))
-        })?;
+    let mut cache = state.env_cache.lock().map_err(|e| {
+        AppError::Anyhow(anyhow::anyhow!(
+            "Failed to acquire environment cache lock (previous panic): {e}"
+        ))
+    })?;
 
     // Update existing entry or push a new one.
     if let Some(existing) = cache.iter_mut().find(|e| e.id == id) {

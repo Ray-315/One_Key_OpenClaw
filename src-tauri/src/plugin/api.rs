@@ -45,27 +45,16 @@ pub enum PluginType {
 }
 
 /// Permission flags declared in a plugin manifest.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginPermissions {
     #[serde(default)]
     pub network: bool,
     #[serde(default)]
     pub filesystem: bool,
-}
-
-impl Default for PluginPermissions {
-    fn default() -> Self {
-        Self {
-            network: false,
-            filesystem: false,
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Runtime plugin info (exposed to frontend)
-// ---------------------------------------------------------------------------
+} // ---------------------------------------------------------------------------
+  // Runtime plugin info (exposed to frontend)
+  // ---------------------------------------------------------------------------
 
 /// Lightweight view of a loaded plugin exposed to the frontend.
 #[derive(Debug, Clone, Serialize, Deserialize)]

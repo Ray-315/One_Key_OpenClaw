@@ -17,6 +17,7 @@ const CLAUDE_CODE_TOML: &str = include_str!("claude-code.toml");
 pub struct RecipeRegistry {
     recipes: HashMap<String, Recipe>,
     /// Local recipes directory for hot-reload watching.
+    #[allow(dead_code)]
     local_dir: Option<PathBuf>,
     /// File watcher handle (kept alive to maintain the watch).
     #[allow(dead_code)]
@@ -85,9 +86,11 @@ impl RecipeRegistry {
     // -----------------------------------------------------------------------
 
     /// Maximum response body size for remote recipe fetch (1 MB).
+    #[allow(dead_code)]
     const MAX_BODY: usize = 1_024 * 1_024;
 
     /// Fetch a recipe from a remote URL (must return TOML).
+    #[allow(dead_code)]
     pub async fn fetch_from_url(&mut self, url: &str) -> Result<Recipe, AppError> {
         let parsed = reqwest::Url::parse(url)
             .map_err(|e| AppError::Anyhow(anyhow::anyhow!("invalid URL: {e}")))?;
@@ -145,6 +148,7 @@ impl RecipeRegistry {
     }
 
     /// Scan `local_dir` for `.toml` recipe files and load them all.
+    #[allow(dead_code)]
     pub fn load_local_recipes(&mut self, dir: &Path) -> Result<usize, AppError> {
         if !dir.exists() {
             return Ok(0);
@@ -173,6 +177,7 @@ impl RecipeRegistry {
 
     /// Watch the local recipes directory for changes and send the id of any
     /// changed recipe over the channel so the caller can re-emit events.
+    #[allow(dead_code)]
     pub fn watch_local_dir(
         &mut self,
         dir: PathBuf,

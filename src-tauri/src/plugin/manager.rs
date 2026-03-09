@@ -84,6 +84,7 @@ impl PluginManager {
     }
 
     /// Look up a loaded plugin by id.
+    #[allow(dead_code)]
     pub fn get_plugin(&self, id: &str) -> Option<PluginInfo> {
         self.plugins.get(id).map(PluginInfo::from)
     }
@@ -94,12 +95,11 @@ impl PluginManager {
 
     fn load_manifest(&mut self, path: &Path) -> Result<PluginManifest, AppError> {
         let content = std::fs::read_to_string(path).map_err(AppError::IoError)?;
-        let manifest: PluginManifest = toml::from_str(&content).map_err(|e| {
-            AppError::PluginError {
+        let manifest: PluginManifest =
+            toml::from_str(&content).map_err(|e| AppError::PluginError {
                 plugin_id: path.display().to_string(),
                 message: format!("invalid plugin.toml: {e}"),
-            }
-        })?;
+            })?;
 
         if manifest.id.is_empty() {
             return Err(AppError::PluginError {

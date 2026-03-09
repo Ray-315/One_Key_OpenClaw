@@ -238,7 +238,7 @@ fn execute_action(
                 task_id,
                 step_id,
                 LogSource::System,
-                &format!("env check: {} → {:?}", env_id, item.status),
+                format!("env check: {} → {:?}", env_id, item.status),
             );
             match &item.status {
                 EnvStatus::Ok => (Some(0), None),
@@ -439,7 +439,7 @@ async fn run_step(
         &task_id,
         &step_id,
         LogSource::System,
-        &format!("Starting step: {}", step.name),
+        format!("Starting step: {}", step.name),
     );
 
     let mut attempt = 0u8;
@@ -497,7 +497,7 @@ async fn run_step(
                 &task_id,
                 &step_id,
                 LogSource::System,
-                &format!("Retrying in {delay}s (attempt {attempt}/{max_attempts})…"),
+                format!("Retrying in {delay}s (attempt {attempt}/{max_attempts})…"),
             );
 
             tokio::time::sleep(Duration::from_secs(delay)).await;
