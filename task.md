@@ -1566,12 +1566,12 @@ One_Key_OpenClaw/
 
 ### Phase 5 — 打磨与发布
 
-- [ ] 完整多平台测试（macOS / Windows / Linux）
-- [ ] 自动更新（tauri-plugin-updater）
-- [ ] 国际化（i18n，中/英）
-- [ ] 单元测试（Rust）+ E2E 测试（Playwright）
-- [ ] 打包 & CI/CD（GitHub Actions）
-- [ ] 文档站点
+- [x] 完整多平台测试（macOS / Windows / Linux）
+- [x] 自动更新（tauri-plugin-updater）
+- [x] 国际化（i18n，中/英）
+- [x] 单元测试（Rust）+ E2E 测试（Playwright）
+- [x] 打包 & CI/CD（GitHub Actions）
+- [x] 文档站点
 
 ---
 
