@@ -1,0 +1,62 @@
+version = "1"
+id = "claude-code"
+name = "Claude Code 快速安装"
+description = "通过 npm 全局安装 Claude Code CLI 工具"
+author = "community"
+tags = ["claude", "ai", "install"]
+platforms = ["macos", "linux", "windows"]
+
+[vars]
+CLAUDE_VERSION = "latest"
+
+[[env_requirements]]
+env_id = "node"
+version = ">=18.0.0"
+optional = false
+
+[[env_requirements]]
+env_id = "git"
+optional = true
+
+[[steps]]
+id = "check-node"
+name = "检查 Node.js 环境"
+
+[steps.action]
+type = "envCheck"
+env_id = "node"
+
+[[steps]]
+id = "install-claude"
+name = "安装 Claude Code"
+depends_on = ["check-node"]
+
+[steps.action]
+type = "shell"
+command = "npm"
+args = ["install", "-g", "@anthropic-ai/claude-code@${CLAUDE_VERSION}"]
+
+[steps.retry]
+max_attempts = 3
+delay_secs = 3
+backoff = "Fixed"
+
+[[steps]]
+id = "verify"
+name = "验证安装"
+depends_on = ["install-claude"]
+
+[steps.action]
+type = "shell"
+command = "claude"
+args = ["--version"]
+
+[[steps]]
+id = "done"
+name = "安装完成"
+depends_on = ["verify"]
+
+[steps.action]
+type = "shell"
+command = "echo"
+args = ["Claude Code 安装成功！运行 'claude' 开始使用。"]

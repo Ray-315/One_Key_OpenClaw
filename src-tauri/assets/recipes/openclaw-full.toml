@@ -1,0 +1,89 @@
+version = "1"
+id = "openclaw-full"
+name = "OpenClaw 完整部署"
+description = "一键克隆、构建并启动 OpenClaw 服务"
+author = "official"
+tags = ["openclaw", "deploy", "full"]
+platforms = ["macos", "linux", "windows"]
+
+[vars]
+REPO_URL = "https://github.com/Ray-315/One_Key_OpenClaw"
+INSTALL_DIR = "~/.openclaw"
+NODE_ENV = "production"
+
+[[env_requirements]]
+env_id = "node"
+version = ">=18.0.0"
+optional = false
+
+[[env_requirements]]
+env_id = "git"
+optional = false
+
+[[env_requirements]]
+env_id = "python"
+version = ">=3.10.0"
+optional = true
+
+[[steps]]
+id = "check-node"
+name = "检查 Node.js 环境"
+
+[steps.action]
+type = "envCheck"
+env_id = "node"
+
+[[steps]]
+id = "check-git"
+name = "检查 Git 环境"
+
+[steps.action]
+type = "envCheck"
+env_id = "git"
+
+[[steps]]
+id = "clone"
+name = "克隆仓库"
+depends_on = ["check-git"]
+
+[steps.action]
+type = "shell"
+command = "git"
+args = ["clone", "${REPO_URL}", "/tmp/openclaw-deploy"]
+
+[[steps]]
+id = "install-deps"
+name = "安装 Node.js 依赖"
+depends_on = ["clone", "check-node"]
+
+[steps.action]
+type = "shell"
+command = "npm"
+args = ["install", "--prefix", "/tmp/openclaw-deploy"]
+env = { NODE_ENV = "${NODE_ENV}" }
+
+[steps.retry]
+max_attempts = 3
+delay_secs = 5
+backoff = "Exponential"
+
+[[steps]]
+id = "build-frontend"
+name = "构建前端"
+depends_on = ["install-deps"]
+timeout_secs = 300
+
+[steps.action]
+type = "shell"
+command = "npm"
+args = ["run", "build", "--prefix", "/tmp/openclaw-deploy"]
+
+[[steps]]
+id = "done"
+name = "部署完成"
+depends_on = ["build-frontend"]
+
+[steps.action]
+type = "shell"
+command = "echo"
+args = ["OpenClaw 部署成功！"]
