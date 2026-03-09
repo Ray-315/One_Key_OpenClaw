@@ -1,0 +1,100 @@
+{
+  "app": {
+    "title": "One Key OpenClaw"
+  },
+  "sidebar": {
+    "dashboard": "📊 Dashboard",
+    "env": "🔍 Environment",
+    "deploy": "🚀 Deploy",
+    "recipe": "📦 Recipes",
+    "flow": "📋 Task Flow",
+    "log": "📝 Logs"
+  },
+  "dashboard": {
+    "title": "📊 Dashboard",
+    "subtitle": "One Key OpenClaw · Deployment Overview",
+    "totalRecipes": "Total Recipes",
+    "successDeploys": "Successful",
+    "failedCount": "Failed",
+    "running": "Running",
+    "envStatus": "🔍 Environment Status",
+    "envNotChecked": "Environment not checked yet",
+    "itemsOk": "{{count}} OK",
+    "itemsMismatch": "{{count}} version mismatch",
+    "itemsMissing": "{{count}} missing",
+    "recentTasks": "📋 Recent Tasks",
+    "noTasks": "No tasks recorded",
+    "quickActions": "⚡ Quick Actions",
+    "oneKeyDeploy": "🚀 One-Key Deploy",
+    "checkEnv": "🔍 Check Environment",
+    "taskFlow": "📊 Task Flow",
+    "viewLog": "📝 View Logs",
+    "envReadiness": "Environment Readiness"
+  },
+  "taskStatus": {
+    "idle": "Idle",
+    "running": "Running",
+    "paused": "Paused",
+    "success": "Success ✓",
+    "failed": "Failed ✕",
+    "cancelled": "Cancelled"
+  },
+  "env": {
+    "title": "Environment Check",
+    "probeAll": "Re-check All",
+    "probing": "Checking...",
+    "filter": "Filter:",
+    "all": "All",
+    "ok": "OK",
+    "missing": "Missing",
+    "versionMismatch": "Version Mismatch"
+  },
+  "deploy": {
+    "title": "🚀 Deploy",
+    "selectRecipe": "Select Recipe",
+    "noRecipe": "No recipes available",
+    "start": "Start Deploy",
+    "pause": "Pause",
+    "resume": "Resume",
+    "cancel": "Cancel"
+  },
+  "recipe": {
+    "title": "📦 Recipe Management",
+    "create": "Create Recipe",
+    "import": "Import",
+    "noRecipes": "No recipes available",
+    "editor": "Recipe Editor",
+    "save": "Save",
+    "delete": "Delete"
+  },
+  "flow": {
+    "title": "📋 Task Flow",
+    "noGraph": "No task flow data available"
+  },
+  "log": {
+    "title": "📝 Logs",
+    "clear": "Clear",
+    "export": "Export"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "retry": "Retry",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "close": "Close",
+    "settings": "Settings",
+    "language": "Language"
+  },
+  "update": {
+    "checking": "Checking for updates...",
+    "available": "New version {{version}} available",
+    "noUpdate": "You are up to date",
+    "downloading": "Downloading update...",
+    "ready": "Update ready, restart to apply",
+    "error": "Failed to check for updates",
+    "checkUpdate": "Check for Updates"
+  }
+}

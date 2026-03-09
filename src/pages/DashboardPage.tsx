@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useEnvStore } from "../store/envStore";
 import { useTaskStore } from "../store/taskStore";
 import { useRecipeStore } from "../store/recipeStore";
@@ -37,6 +38,7 @@ function StatCard({
 }
 
 function EnvSummary({ envItems }: { envItems: EnvItem[] }) {
+  const { t } = useTranslation();
   const ok = envItems.filter((e) => e.status.type === "ok").length;
   const missing = envItems.filter((e) => e.status.type === "missing").length;
   const mismatch = envItems.filter(
@@ -46,11 +48,11 @@ function EnvSummary({ envItems }: { envItems: EnvItem[] }) {
   return (
     <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
       <h3 className="mb-3 text-sm font-semibold text-[var(--color-text)]">
-        🔍 环境状态
+        {t("dashboard.envStatus")}
       </h3>
       {envItems.length === 0 ? (
         <p className="text-xs text-[var(--color-text-muted)]">
-          尚未检测环境
+          {t("dashboard.envNotChecked")}
         </p>
       ) : (
         <div className="space-y-1">
@@ -58,7 +60,7 @@ function EnvSummary({ envItems }: { envItems: EnvItem[] }) {
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-green-500" />
               <span className="text-xs text-[var(--color-text-muted)]">
-                {ok} 项正常
+                {t("dashboard.itemsOk", { count: ok })}
               </span>
             </div>
           )}
@@ -66,7 +68,7 @@ function EnvSummary({ envItems }: { envItems: EnvItem[] }) {
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-yellow-500" />
               <span className="text-xs text-[var(--color-text-muted)]">
-                {mismatch} 项版本不符
+                {t("dashboard.itemsMismatch", { count: mismatch })}
               </span>
             </div>
           )}
@@ -74,7 +76,7 @@ function EnvSummary({ envItems }: { envItems: EnvItem[] }) {
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-red-500" />
               <span className="text-xs text-[var(--color-text-muted)]">
-                {missing} 项缺失
+                {t("dashboard.itemsMissing", { count: missing })}
               </span>
             </div>
           )}
@@ -113,29 +115,30 @@ function StatusDot({ status }: { status: string }) {
 }
 
 function RecentTaskList({ tasks }: { tasks: Task[] }) {
+  const { t } = useTranslation();
   const recent = tasks.slice(0, 5);
 
-  const statusLabel: Record<string, { label: string; cls: string }> = {
-    idle: { label: "等待", cls: "text-[var(--color-text-muted)]" },
-    running: { label: "进行中", cls: "text-blue-400" },
-    paused: { label: "已暂停", cls: "text-yellow-400" },
-    success: { label: "成功 ✓", cls: "text-green-400" },
-    failed: { label: "失败 ✕", cls: "text-red-400" },
-    cancelled: { label: "已取消", cls: "text-[var(--color-text-muted)]" },
+  const statusKeys: Record<string, { key: string; cls: string }> = {
+    idle: { key: "taskStatus.idle", cls: "text-[var(--color-text-muted)]" },
+    running: { key: "taskStatus.running", cls: "text-blue-400" },
+    paused: { key: "taskStatus.paused", cls: "text-yellow-400" },
+    success: { key: "taskStatus.success", cls: "text-green-400" },
+    failed: { key: "taskStatus.failed", cls: "text-red-400" },
+    cancelled: { key: "taskStatus.cancelled", cls: "text-[var(--color-text-muted)]" },
   };
 
   return (
     <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
       <h3 className="mb-3 text-sm font-semibold text-[var(--color-text)]">
-        📋 最近任务
+        {t("dashboard.recentTasks")}
       </h3>
       {recent.length === 0 ? (
-        <p className="text-xs text-[var(--color-text-muted)]">暂无任务记录</p>
+        <p className="text-xs text-[var(--color-text-muted)]">{t("dashboard.noTasks")}</p>
       ) : (
         <ul className="space-y-2">
           {recent.map((task) => {
-            const { label, cls } = statusLabel[task.status] ?? {
-              label: task.status,
+            const { key, cls } = statusKeys[task.status] ?? {
+              key: task.status,
               cls: "",
             };
             return (
@@ -151,7 +154,7 @@ function RecentTaskList({ tasks }: { tasks: Task[] }) {
                     {new Date(task.createdAt).toLocaleString()}
                   </p>
                 </div>
-                <span className={`shrink-0 text-xs ${cls}`}>{label}</span>
+                <span className={`shrink-0 text-xs ${cls}`}>{t(key)}</span>
               </li>
             );
           })}
@@ -166,6 +169,7 @@ function RecentTaskList({ tasks }: { tasks: Task[] }) {
 // ---------------------------------------------------------------------------
 
 export function DashboardPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { items: envItems, probeAll } = useEnvStore();
   const { tasks, loadTasks } = useTaskStore();
@@ -192,9 +196,9 @@ export function DashboardPage() {
     <div className="flex h-full flex-col overflow-auto">
       {/* Header */}
       <div className="border-b border-[var(--color-border)] px-6 py-4">
-        <h2 className="text-lg font-bold">📊 仪表板</h2>
+        <h2 className="text-lg font-bold">{t("dashboard.title")}</h2>
         <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
-          One Key OpenClaw · 部署概览
+          {t("dashboard.subtitle")}
         </p>
       </div>
 
@@ -203,25 +207,25 @@ export function DashboardPage() {
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <StatCard
             icon="🚀"
-            label="配方总数"
+            label={t("dashboard.totalRecipes")}
             value={recipes.length}
             color="#6366f1"
           />
           <StatCard
             icon="✅"
-            label="成功部署"
+            label={t("dashboard.successDeploys")}
             value={successCount}
             color="#22c55e"
           />
           <StatCard
             icon="❌"
-            label="失败次数"
+            label={t("dashboard.failedCount")}
             value={failedCount}
             color="#ef4444"
           />
           <StatCard
             icon="⚡"
-            label="正在运行"
+            label={t("dashboard.running")}
             value={runningCount}
             color="#3b82f6"
           />
@@ -236,32 +240,32 @@ export function DashboardPage() {
         {/* Quick actions */}
         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
           <h3 className="mb-3 text-sm font-semibold text-[var(--color-text)]">
-            ⚡ 快速操作
+            {t("dashboard.quickActions")}
           </h3>
           <div className="flex flex-wrap gap-3">
             <button
               onClick={() => navigate("/deploy")}
               className="rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)]"
             >
-              🚀 一键部署
+              {t("dashboard.oneKeyDeploy")}
             </button>
             <button
               onClick={() => navigate("/env")}
               className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]"
             >
-              🔍 检测环境
+              {t("dashboard.checkEnv")}
             </button>
             <button
               onClick={() => navigate("/flow")}
               className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]"
             >
-              📊 任务流程图
+              {t("dashboard.taskFlow")}
             </button>
             <button
               onClick={() => navigate("/log")}
               className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]"
             >
-              📝 查看日志
+              {t("dashboard.viewLog")}
             </button>
           </div>
         </div>
@@ -270,7 +274,7 @@ export function DashboardPage() {
         {envTotalCount > 0 && (
           <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
             <div className="mb-2 flex items-center justify-between text-xs text-[var(--color-text-muted)]">
-              <span>环境就绪度</span>
+              <span>{t("dashboard.envReadiness")}</span>
               <span>
                 {envOkCount}/{envTotalCount}
               </span>

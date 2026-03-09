@@ -1,0 +1,100 @@
+{
+  "app": {
+    "title": "One Key OpenClaw"
+  },
+  "sidebar": {
+    "dashboard": "📊 仪表板",
+    "env": "🔍 环境检测",
+    "deploy": "🚀 部署",
+    "recipe": "📦 配方管理",
+    "flow": "📋 任务流程",
+    "log": "📝 日志"
+  },
+  "dashboard": {
+    "title": "📊 仪表板",
+    "subtitle": "One Key OpenClaw · 部署概览",
+    "totalRecipes": "配方总数",
+    "successDeploys": "成功部署",
+    "failedCount": "失败次数",
+    "running": "正在运行",
+    "envStatus": "🔍 环境状态",
+    "envNotChecked": "尚未检测环境",
+    "itemsOk": "{{count}} 项正常",
+    "itemsMismatch": "{{count}} 项版本不符",
+    "itemsMissing": "{{count}} 项缺失",
+    "recentTasks": "📋 最近任务",
+    "noTasks": "暂无任务记录",
+    "quickActions": "⚡ 快速操作",
+    "oneKeyDeploy": "🚀 一键部署",
+    "checkEnv": "🔍 检测环境",
+    "taskFlow": "📊 任务流程图",
+    "viewLog": "📝 查看日志",
+    "envReadiness": "环境就绪度"
+  },
+  "taskStatus": {
+    "idle": "等待",
+    "running": "进行中",
+    "paused": "已暂停",
+    "success": "成功 ✓",
+    "failed": "失败 ✕",
+    "cancelled": "已取消"
+  },
+  "env": {
+    "title": "环境检测",
+    "probeAll": "全部重新检测",
+    "probing": "检测中...",
+    "filter": "筛选:",
+    "all": "全部",
+    "ok": "正常",
+    "missing": "缺失",
+    "versionMismatch": "版本不符"
+  },
+  "deploy": {
+    "title": "🚀 部署",
+    "selectRecipe": "选择配方",
+    "noRecipe": "暂无可用配方",
+    "start": "开始部署",
+    "pause": "暂停",
+    "resume": "恢复",
+    "cancel": "取消"
+  },
+  "recipe": {
+    "title": "📦 配方管理",
+    "create": "创建配方",
+    "import": "导入",
+    "noRecipes": "暂无配方",
+    "editor": "配方编辑器",
+    "save": "保存",
+    "delete": "删除"
+  },
+  "flow": {
+    "title": "📋 任务流程",
+    "noGraph": "暂无任务流程数据"
+  },
+  "log": {
+    "title": "📝 日志",
+    "clear": "清空",
+    "export": "导出"
+  },
+  "common": {
+    "loading": "加载中...",
+    "error": "错误",
+    "retry": "重试",
+    "confirm": "确认",
+    "cancel": "取消",
+    "save": "保存",
+    "delete": "删除",
+    "close": "关闭",
+    "settings": "设置",
+    "language": "语言"
+  },
+  "update": {
+    "checking": "正在检查更新...",
+    "available": "发现新版本 {{version}}",
+    "noUpdate": "当前已是最新版本",
+    "downloading": "正在下载更新...",
+    "ready": "更新已就绪，重启后生效",
+    "error": "检查更新失败",
+    "checkUpdate": "检查更新"
+  }
+}
