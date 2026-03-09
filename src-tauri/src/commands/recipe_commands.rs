@@ -62,3 +62,27 @@ pub fn delete_recipe(
         .map_err(|e| AppError::Anyhow(anyhow::anyhow!("lock poisoned: {e}")))?;
     registry.delete(&recipe_id)
 }
+
+/// Fetch a recipe from a remote URL and register it.
+#[tauri::command]
+pub async fn fetch_recipe_url(
+    state: State<'_, AppState>,
+    url: String,
+) -> Result<Recipe, AppError> {
+    // Must drop the lock before the await, so fetch separately.
+    let body = reqwest::get(&url)
+        .await
+        .map_err(|e| AppError::Anyhow(anyhow::anyhow!("HTTP fetch failed: {e}")))?
+        .text()
+        .await
+        .map_err(|e| AppError::Anyhow(anyhow::anyhow!("failed to read body: {e}")))?;
+
+    let recipe = crate::recipe::parser::parse_toml(&body)?;
+
+    let mut registry = state
+        .recipes
+        .lock()
+        .map_err(|e| AppError::Anyhow(anyhow::anyhow!("lock poisoned: {e}")))?;
+    registry.save(recipe.clone());
+    Ok(recipe)
+}

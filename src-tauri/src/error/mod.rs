@@ -30,6 +30,9 @@ pub enum AppError {
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 
+    #[error("Plugin error: {plugin_id} - {message}")]
+    PluginError { plugin_id: String, message: String },
+
     #[error("System error: {0}")]
     Anyhow(#[from] anyhow::Error),
 }
