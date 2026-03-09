@@ -209,17 +209,17 @@ pub fn validate_recipe(recipe: &Recipe) -> Vec<ValidationIssue> {
 
     // Ensure step IDs are unique.
     let mut seen_ids = std::collections::HashSet::new();
-    for step in &recipe.steps {
+    for (idx, step) in recipe.steps.iter().enumerate() {
         if step.id.is_empty() {
             issues.push(ValidationIssue {
-                field: format!("steps[{}].id", step.id),
+                field: format!("steps[{idx}].id"),
                 message: "step id must not be empty".into(),
                 severity: IssueSeverity::Error,
             });
         }
         if !seen_ids.insert(step.id.clone()) {
             issues.push(ValidationIssue {
-                field: format!("steps[{}].id", step.id),
+                field: format!("steps[{idx}].id"),
                 message: format!("duplicate step id: {}", step.id),
                 severity: IssueSeverity::Error,
             });

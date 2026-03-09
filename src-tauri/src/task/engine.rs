@@ -465,7 +465,12 @@ pub async fn run_task_executor(
         );
 
         // --- execute with retries ---
-        let max_retries = step.retry.as_ref().map(|r| r.max_attempts).unwrap_or(0);
+        // Retries are triggered when:
+        //   - on_error is explicitly set to Retry, OR
+        //   - a RetryConfig is provided (max_attempts > 0).
+        // In both cases, the retry count is bounded by RetryConfig.max_attempts.
+        let max_attempts = step.retry.as_ref().map(|r| r.max_attempts).unwrap_or(0);
+        let should_retry = step.on_error == OnErrorStrategy::Retry || step.retry.is_some();
         let mut attempt = 0u8;
 
         loop {
@@ -489,10 +494,7 @@ pub async fn run_task_executor(
 
             let err_msg = error.unwrap();
 
-            if attempt < max_retries
-                && (step.on_error == OnErrorStrategy::Retry
-                    || step.retry.is_some())
-            {
+            if attempt < max_attempts && should_retry {
                 attempt += 1;
                 let delay = {
                     let cfg = step.retry.as_ref();
@@ -518,7 +520,7 @@ pub async fn run_task_executor(
                     },
                     &step.id,
                     LogSource::System,
-                    &format!("Retrying in {delay}s (attempt {attempt}/{max_retries})…"),
+                    &format!("Retrying in {delay}s (attempt {attempt}/{max_attempts})…"),
                 );
 
                 tokio::time::sleep(Duration::from_secs(delay)).await;
