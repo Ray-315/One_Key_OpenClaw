@@ -150,8 +150,7 @@ export function TaskFlow({
 }: TaskFlowProps) {
   const initialNodes = useMemo(
     () => buildFlowNodes(graphData.nodes, stepStatuses),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [graphData]
+    [graphData, stepStatuses]
   );
   const initialEdges = useMemo(
     () => buildFlowEdges(graphData.edges),

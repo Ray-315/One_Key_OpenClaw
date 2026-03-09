@@ -246,7 +246,7 @@ export function DashboardPage() {
               🚀 一键部署
             </button>
             <button
-              onClick={() => navigate("/")}
+              onClick={() => navigate("/env")}
               className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]"
             >
               🔍 检测环境

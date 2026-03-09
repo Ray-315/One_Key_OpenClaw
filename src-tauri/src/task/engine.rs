@@ -440,7 +440,7 @@ async fn run_step(
         let (exit_code, error) =
             tokio::task::spawn_blocking(move || execute_action(&action, &task_id_c, &step_id_c, &app_c))
                 .await
-                .unwrap_or_else(|_| (None, Some("step task panicked".into())));
+                .unwrap_or_else(|_| (None, Some(format!("step '{}' task panicked", step_id))));
 
         if error.is_none() {
             // Success
@@ -650,8 +650,7 @@ pub async fn run_task_executor(
                         // Drain remaining join results so they don't leak.
                         while join_set.join_next().await.is_some() {}
                         cancel_all_pending(&app, &task_arc, &completed, &running);
-                        let _ = step_id; // step status already set in run_step
-                        // Will terminate on next loop iteration.
+                        // Step status already updated in run_step; will terminate on next loop iteration.
                     }
                     Err(_) => {
                         // Task was aborted (cancel path); outcome handled above.
