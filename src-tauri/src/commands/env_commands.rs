@@ -12,7 +12,11 @@ pub fn probe_all_envs(state: State<'_, AppState>) -> Result<Vec<EnvItem>, AppErr
     let mut cache = state
         .env_cache
         .lock()
-        .map_err(|e| AppError::Anyhow(anyhow::anyhow!("Lock poisoned: {e}")))?;
+        .map_err(|e| {
+            AppError::Anyhow(anyhow::anyhow!(
+                "Failed to acquire environment cache lock (previous panic): {e}"
+            ))
+        })?;
     *cache = items.clone();
 
     Ok(items)
@@ -26,7 +30,11 @@ pub fn probe_env(id: String, state: State<'_, AppState>) -> Result<EnvItem, AppE
     let mut cache = state
         .env_cache
         .lock()
-        .map_err(|e| AppError::Anyhow(anyhow::anyhow!("Lock poisoned: {e}")))?;
+        .map_err(|e| {
+            AppError::Anyhow(anyhow::anyhow!(
+                "Failed to acquire environment cache lock (previous panic): {e}"
+            ))
+        })?;
 
     // Update existing entry or push a new one.
     if let Some(existing) = cache.iter_mut().find(|e| e.id == id) {

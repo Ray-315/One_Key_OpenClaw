@@ -121,7 +121,7 @@ impl EnvProber {
     }
 
     /// Parse a version string from the output of `<tool> --version`.
-    /// Each tool has a slightly different output format.
+    /// The `id` parameter is reserved for future tool-specific parsing.
     fn parse_version(_id: &str, output: &str) -> Option<String> {
         // Look for the first semver-like pattern (e.g. 1.2.3, 20.11.0)
         let re_like = output

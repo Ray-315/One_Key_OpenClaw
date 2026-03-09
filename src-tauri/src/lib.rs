@@ -9,7 +9,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
-        .manage(state::AppState::new())
+        .manage(state::AppState::default())
         .invoke_handler(tauri::generate_handler![
             commands::env_commands::probe_all_envs,
             commands::env_commands::probe_env,
