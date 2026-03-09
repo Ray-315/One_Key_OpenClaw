@@ -29,6 +29,9 @@ pub fn run() {
             commands::recipe_commands::validate_recipe_cmd,
             commands::recipe_commands::save_recipe,
             commands::recipe_commands::delete_recipe,
+            // error / diagnostics
+            commands::error_commands::diagnose_step_error,
+            commands::error_commands::get_recipe_graph,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

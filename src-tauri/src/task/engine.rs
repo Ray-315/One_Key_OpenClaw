@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
@@ -7,12 +7,14 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc;
+use tokio::task::JoinSet;
 
 use crate::env::prober::{EnvProber, EnvStatus};
 use crate::log::pipeline::{LogLevel, LogPipeline, LogSource};
 use crate::recipe::schema::{
     BackoffStrategy, OnErrorStrategy, PackageManager, Recipe, RecipeStep, StepAction,
 };
+use crate::task::graph::TaskGraph;
 use crate::task::state_machine::TaskControl;
 use crate::task::step::{StepStatus, TaskStep};
 
@@ -387,6 +389,137 @@ fn set_task_status(
 }
 
 /// Main async executor. Runs all steps serially and handles pause / cancel.
+/// Outcome reported by a single step execution task.
+enum StepOutcome {
+    /// Step finished successfully.
+    Success { step_id: String },
+    /// Step failed but `on_error = skip`, so the task may continue.
+    Skipped { step_id: String },
+    /// Step failed and the task should abort.
+    Failed { step_id: String, error: String },
+}
+
+/// Async wrapper: execute a single step (with retry logic) and report the
+/// outcome.  This function is spawned as a tokio task so it can run in
+/// parallel with other steps.
+async fn run_step(
+    app: AppHandle,
+    task_arc: Arc<Mutex<Task>>,
+    task_id: String,
+    step: RecipeStep,
+) -> StepOutcome {
+    let step_id = step.id.clone();
+    let max_attempts = step.retry.as_ref().map(|r| r.max_attempts).unwrap_or(0);
+    let should_retry = step.on_error == OnErrorStrategy::Retry || step.retry.is_some();
+
+    // Mark step Running.
+    update_step(&app, &task_arc, &step_id, |s| {
+        s.status = StepStatus::Running;
+        s.started_at = Some(now_ms());
+    });
+    emit_progress(&app, &task_arc, Some(&step_id));
+
+    LogPipeline::log_step(
+        &app,
+        LogLevel::Info,
+        &task_id,
+        &step_id,
+        LogSource::System,
+        &format!("Starting step: {}", step.name),
+    );
+
+    let mut attempt = 0u8;
+
+    loop {
+        // Run the blocking execute_action on a thread-pool thread.
+        let action = step.action.clone();
+        let task_id_c = task_id.clone();
+        let step_id_c = step_id.clone();
+        let app_c = app.clone();
+
+        let (exit_code, error) =
+            tokio::task::spawn_blocking(move || execute_action(&action, &task_id_c, &step_id_c, &app_c))
+                .await
+                .unwrap_or_else(|_| (None, Some(format!("step '{}' task panicked", step_id))));
+
+        if error.is_none() {
+            // Success
+            update_step(&app, &task_arc, &step_id, |s| {
+                s.status = StepStatus::Success;
+                s.finished_at = Some(now_ms());
+                s.exit_code = exit_code;
+                s.retry_count = attempt;
+            });
+            emit_progress(&app, &task_arc, None);
+            return StepOutcome::Success { step_id };
+        }
+
+        let err_msg = error.unwrap();
+
+        if attempt < max_attempts && should_retry {
+            attempt += 1;
+            let delay = {
+                let cfg = step.retry.as_ref();
+                let base = cfg.map(|r| r.delay_secs).unwrap_or(3);
+                if cfg
+                    .map(|r| r.backoff == BackoffStrategy::Exponential)
+                    .unwrap_or(false)
+                {
+                    base * 2u64.pow(attempt as u32 - 1)
+                } else {
+                    base
+                }
+            };
+
+            update_step(&app, &task_arc, &step_id, |s| {
+                s.retry_count = attempt;
+                s.status = StepStatus::Running;
+            });
+
+            LogPipeline::log_step(
+                &app,
+                LogLevel::Warn,
+                &task_id,
+                &step_id,
+                LogSource::System,
+                &format!("Retrying in {delay}s (attempt {attempt}/{max_attempts})…"),
+            );
+
+            tokio::time::sleep(Duration::from_secs(delay)).await;
+            continue;
+        }
+
+        // Step failed — update status.
+        update_step(&app, &task_arc, &step_id, |s| {
+            s.status = StepStatus::Failed {
+                error: err_msg.clone(),
+            };
+            s.finished_at = Some(now_ms());
+            s.exit_code = exit_code;
+            s.retry_count = attempt;
+        });
+        emit_progress(&app, &task_arc, None);
+
+        if step.on_error == OnErrorStrategy::Skip {
+            update_step(&app, &task_arc, &step_id, |s| {
+                s.status = StepStatus::Skipped;
+            });
+            return StepOutcome::Skipped { step_id };
+        }
+
+        return StepOutcome::Failed {
+            step_id,
+            error: err_msg,
+        };
+    }
+}
+
+/// Main async executor.
+///
+/// Phase 3: builds a DAG from the recipe steps and executes layers in
+/// parallel.  Within a layer, all independent steps run concurrently via
+/// `tokio::task::JoinSet`.  Pause / cancel control messages are processed
+/// between scheduling rounds.
 pub async fn run_task_executor(
     app: AppHandle,
     task_arc: Arc<Mutex<Task>>,
@@ -394,36 +527,57 @@ pub async fn run_task_executor(
     vars: HashMap<String, String>,
     mut ctrl_rx: mpsc::Receiver<TaskControl>,
 ) {
+    // Build DAG — abort immediately if the recipe has invalid dependencies.
+    let graph = match TaskGraph::build(&recipe.steps) {
+        Ok(g) => g,
+        Err(e) => {
+            set_task_status(&app, &task_arc, TaskStatus::Failed, Some(e.to_string()));
+            return;
+        }
+    };
+
     set_task_status(&app, &task_arc, TaskStatus::Running, None);
 
     // Merge recipe vars with caller-supplied vars (caller wins).
     let mut merged_vars = recipe.vars.clone();
     merged_vars.extend(vars);
 
-    let steps_cloned: Vec<RecipeStep> = recipe.steps.clone();
+    let task_id: String = task_arc.lock().unwrap().id.clone();
+    let total_steps = recipe.steps.len();
+
+    // Track execution state.
+    let mut completed: HashSet<String> = HashSet::new();
+    let mut running: HashSet<String> = HashSet::new();
+    let mut task_failed = false;
+    let mut fail_error: Option<String> = None;
     let mut paused = false;
 
-    'steps: for recipe_step in &steps_cloned {
-        // --- drain control messages (non-blocking) ---
+    // JoinSet holds all concurrently executing step futures.
+    let mut join_set: JoinSet<StepOutcome> = JoinSet::new();
+
+    loop {
+        // ── Drain non-blocking control messages ─────────────────────────
         loop {
             match ctrl_rx.try_recv() {
                 Ok(TaskControl::Cancel) => {
-                    cancel_remaining_steps(&app, &task_arc, &recipe_step.id);
+                    join_set.abort_all();
+                    cancel_all_pending(&app, &task_arc, &completed, &running);
                     set_task_status(&app, &task_arc, TaskStatus::Cancelled, None);
                     return;
                 }
-                Ok(TaskControl::Pause) => {
-                    paused = true;
-                }
+                Ok(TaskControl::Pause) => paused = true,
                 Ok(TaskControl::Resume) => {
-                    paused = false;
+                    if paused {
+                        paused = false;
+                        set_task_status(&app, &task_arc, TaskStatus::Running, None);
+                    }
                 }
                 Err(_) => break,
             }
         }
 
-        // --- handle paused state ---
-        if paused {
+        // ── If paused and nothing is running, wait for a control message ─
+        if paused && join_set.is_empty() {
             set_task_status(&app, &task_arc, TaskStatus::Paused, None);
             loop {
                 match ctrl_rx.recv().await {
@@ -433,7 +587,7 @@ pub async fn run_task_executor(
                         break;
                     }
                     Some(TaskControl::Cancel) | None => {
-                        cancel_remaining_steps(&app, &task_arc, &recipe_step.id);
+                        cancel_all_pending(&app, &task_arc, &completed, &running);
                         set_task_status(&app, &task_arc, TaskStatus::Cancelled, None);
                         return;
                     }
@@ -442,139 +596,116 @@ pub async fn run_task_executor(
             }
         }
 
-        // --- substitute vars in step ---
-        let step = substitute_step(recipe_step, &merged_vars);
-
-        // --- mark step Running ---
-        update_step(&app, &task_arc, &step.id, |s| {
-            s.status = StepStatus::Running;
-            s.started_at = Some(now_ms());
-        });
-        emit_progress(&app, &task_arc, Some(&step.id));
-
-        LogPipeline::log_step(
-            &app,
-            LogLevel::Info,
-            &{
-                let t = task_arc.lock().unwrap();
-                t.id.clone()
-            },
-            &step.id,
-            LogSource::System,
-            &format!("Starting step: {}", step.name),
-        );
-
-        // --- execute with retries ---
-        // Retries are triggered when:
-        //   - on_error is explicitly set to Retry, OR
-        //   - a RetryConfig is provided (max_attempts > 0).
-        // In both cases, the retry count is bounded by RetryConfig.max_attempts.
-        let max_attempts = step.retry.as_ref().map(|r| r.max_attempts).unwrap_or(0);
-        let should_retry = step.on_error == OnErrorStrategy::Retry || step.retry.is_some();
-        let mut attempt = 0u8;
-
-        loop {
-            let task_id = {
-                let t = task_arc.lock().unwrap();
-                t.id.clone()
-            };
-            let (exit_code, error) = execute_action(&step.action, &task_id, &step.id, &app);
-
-            if error.is_none() {
-                // Success
-                update_step(&app, &task_arc, &step.id, |s| {
-                    s.status = StepStatus::Success;
-                    s.finished_at = Some(now_ms());
-                    s.exit_code = exit_code;
-                    s.retry_count = attempt;
-                });
-                emit_progress(&app, &task_arc, None);
-                break; // next step
-            }
-
-            let err_msg = error.unwrap();
-
-            if attempt < max_attempts && should_retry {
-                attempt += 1;
-                let delay = {
-                    let cfg = step.retry.as_ref();
-                    let base = cfg.map(|r| r.delay_secs).unwrap_or(3);
-                    if cfg.map(|r| r.backoff == BackoffStrategy::Exponential).unwrap_or(false) {
-                        base * 2u64.pow(attempt as u32 - 1)
-                    } else {
-                        base
-                    }
+        // ── Schedule newly ready steps (if not failed / paused) ─────────
+        if !task_failed && !paused {
+            let ready = graph.get_ready_steps(&completed, &running);
+            for step_id in ready {
+                let recipe_step = match recipe.steps.iter().find(|s| s.id == step_id) {
+                    Some(rs) => rs.clone(),
+                    None => continue,
                 };
+                let step = substitute_step(&recipe_step, &merged_vars);
+                running.insert(step_id.clone());
 
-                update_step(&app, &task_arc, &step.id, |s| {
-                    s.retry_count = attempt;
-                    s.status = StepStatus::Running;
-                });
+                let app_c = app.clone();
+                let task_arc_c = task_arc.clone();
+                let tid = task_id.clone();
+                join_set.spawn(run_step(app_c, task_arc_c, tid, step));
+            }
+        }
 
-                LogPipeline::log_step(
+        // ── Check termination ────────────────────────────────────────────
+        if join_set.is_empty() {
+            if task_failed {
+                set_task_status(&app, &task_arc, TaskStatus::Failed, fail_error);
+            } else if completed.len() == total_steps {
+                set_task_status(&app, &task_arc, TaskStatus::Success, None);
+            } else {
+                // Some steps couldn't be reached (dependency on a failed step).
+                set_task_status(
                     &app,
-                    LogLevel::Warn,
-                    &{
-                        let t = task_arc.lock().unwrap();
-                        t.id.clone()
-                    },
-                    &step.id,
-                    LogSource::System,
-                    &format!("Retrying in {delay}s (attempt {attempt}/{max_attempts})…"),
+                    &task_arc,
+                    TaskStatus::Failed,
+                    Some("Some steps were unreachable due to upstream failures".into()),
                 );
-
-                tokio::time::sleep(Duration::from_secs(delay)).await;
-                continue;
             }
+            return;
+        }
 
-            // Step failed
-            update_step(&app, &task_arc, &step.id, |s| {
-                s.status = StepStatus::Failed { error: err_msg.clone() };
-                s.finished_at = Some(now_ms());
-                s.exit_code = exit_code;
-                s.retry_count = attempt;
-            });
-            emit_progress(&app, &task_arc, None);
-
-            match step.on_error {
-                OnErrorStrategy::Skip => {
-                    // Mark as skipped and continue with next step.
-                    update_step(&app, &task_arc, &step.id, |s| {
-                        s.status = StepStatus::Skipped;
-                    });
-                }
-                _ => {
-                    // Fail the task.
-                    set_task_status(&app, &task_arc, TaskStatus::Failed, Some(err_msg));
-                    return;
+        // ── Wait for the next step to finish (or a control message) ──────
+        tokio::select! {
+            Some(result) = join_set.join_next() => {
+                match result {
+                    Ok(StepOutcome::Success { step_id }) |
+                    Ok(StepOutcome::Skipped { step_id }) => {
+                        running.remove(&step_id);
+                        completed.insert(step_id);
+                    }
+                    Ok(StepOutcome::Failed { step_id, error }) => {
+                        running.remove(&step_id);
+                        task_failed = true;
+                        fail_error = Some(error);
+                        // Abort all other in-flight steps.
+                        join_set.abort_all();
+                        // Drain remaining join results so they don't leak.
+                        while join_set.join_next().await.is_some() {}
+                        cancel_all_pending(&app, &task_arc, &completed, &running);
+                        // Step status already updated in run_step; will terminate on next loop iteration.
+                    }
+                    Err(_) => {
+                        // Task was aborted (cancel path); outcome handled above.
+                    }
                 }
             }
-
-            continue 'steps;
+            msg = ctrl_rx.recv() => {
+                match msg {
+                    Some(TaskControl::Cancel) => {
+                        join_set.abort_all();
+                        while join_set.join_next().await.is_some() {}
+                        cancel_all_pending(&app, &task_arc, &completed, &running);
+                        set_task_status(&app, &task_arc, TaskStatus::Cancelled, None);
+                        return;
+                    }
+                    Some(TaskControl::Pause) => {
+                        paused = true;
+                        // Let running steps finish naturally before fully pausing.
+                        set_task_status(&app, &task_arc, TaskStatus::Paused, None);
+                    }
+                    Some(TaskControl::Resume) => {
+                        if paused {
+                            paused = false;
+                            set_task_status(&app, &task_arc, TaskStatus::Running, None);
+                        }
+                    }
+                    None => { /* channel closed */ }
+                }
+            }
         }
     }
-
-    set_task_status(&app, &task_arc, TaskStatus::Success, None);
 }
-
-/// Mark all remaining (Pending/Waiting) steps as Cancelled.
-fn cancel_remaining_steps(app: &AppHandle, task_arc: &Arc<Mutex<Task>>, from_step_id: &str) {
-    let steps_snapshot: Vec<(String, StepStatus)> = {
+/// Mark all Pending/Waiting steps (not in `completed` or `running`) as
+/// Cancelled.  Used when a task is aborted.
+fn cancel_all_pending(
+    app: &AppHandle,
+    task_arc: &Arc<Mutex<Task>>,
+    completed: &HashSet<String>,
+    running: &HashSet<String>,
+) {
+    let ids: Vec<String> = {
         let task = task_arc.lock().unwrap();
         task.steps
             .iter()
-            .map(|s| (s.id.clone(), s.status.clone()))
+            .filter(|s| {
+                !completed.contains(&s.id)
+                    && !running.contains(&s.id)
+                    && matches!(s.status, StepStatus::Pending | StepStatus::Waiting)
+            })
+            .map(|s| s.id.clone())
             .collect()
     };
-    let mut reached = false;
-    for (id, status) in steps_snapshot {
-        if id == from_step_id {
-            reached = true;
-        }
-        if reached && matches!(status, StepStatus::Pending | StepStatus::Waiting) {
-            update_step(app, task_arc, &id, |s| {
-                s.status = StepStatus::Cancelled;
-            });
-        }
+    for id in ids {
+        update_step(app, task_arc, &id, |s| {
+            s.status = StepStatus::Cancelled;
+        });
     }
 }

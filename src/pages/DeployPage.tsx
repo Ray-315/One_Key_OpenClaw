@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRecipeStore } from "../store/recipeStore";
 import { useTaskStore } from "../store/taskStore";
 import { useTaskRunner } from "../hooks/useTaskRunner";
@@ -6,7 +6,9 @@ import { useLogStream } from "../hooks/useLogStream";
 import { StepList } from "../components/task/StepList";
 import { ProgressBar } from "../components/task/ProgressBar";
 import { LogTerminal } from "../components/log/LogTerminal";
-import type { Recipe } from "../ipc/types";
+import { ErrorAlert } from "../components/error/ErrorAlert";
+import { diagnoseStepError } from "../ipc/errorApi";
+import type { Recipe, DiagnosticReport } from "../ipc/types";
 
 export function DeployPage() {
   const { recipes, loading: recipesLoading, loadRecipes } = useRecipeStore();
@@ -16,6 +18,7 @@ export function DeployPage() {
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [showLog, setShowLog] = useState(true);
+  const [diagnostics, setDiagnostics] = useState<DiagnosticReport | null>(null);
 
   const activeTask = activeTaskId ? tasks[activeTaskId] : null;
 
@@ -85,7 +88,40 @@ export function DeployPage() {
   function handleNewDeploy() {
     setActiveTask(null);
     setError(null);
+    setDiagnostics(null);
   }
+
+  // Auto-diagnose when a task fails and there's a failed step.
+  const runDiagnostics = useCallback(async () => {
+    if (!activeTask || activeTask.status !== "failed") return;
+    const failedStep = activeTask.steps.find(
+      (s) => s.status && typeof s.status === "object" && s.status.type === "failed"
+    );
+    if (!failedStep) return;
+    const rawError =
+      typeof failedStep.status === "object" && failedStep.status.type === "failed"
+        ? failedStep.status.error
+        : activeTask.errorSummary ?? "";
+    if (!rawError) return;
+    try {
+      const report = await diagnoseStepError(
+        activeTask.id,
+        failedStep.id,
+        rawError
+      );
+      setDiagnostics(report);
+    } catch {
+      /* silently ignore diagnostic errors */
+    }
+  }, [activeTask]);
+
+  // Trigger diagnostics automatically when task fails.
+  useEffect(() => {
+    if (activeTask?.status === "failed" && !diagnostics) {
+      runDiagnostics();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTask?.status]);
 
   return (
     <div className="flex h-full flex-col">
@@ -201,6 +237,29 @@ export function DeployPage() {
               <div className="mb-4 rounded-md bg-red-500/10 px-4 py-3 text-sm text-red-400">
                 {activeTask.errorSummary}
               </div>
+            )}
+
+            {/* Diagnostic panel */}
+            {diagnostics && activeTask.status === "failed" && (
+              <section className="mb-6">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-sm font-medium text-[var(--color-text-muted)]">
+                    🩺 错误诊断
+                  </p>
+                  <button
+                    onClick={() => setDiagnostics(null)}
+                    className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+                  >
+                    关闭
+                  </button>
+                </div>
+                <ErrorAlert
+                  report={diagnostics}
+                  onRetry={(_stepId) => {
+                    /* future: invoke retry_step command */
+                  }}
+                />
+              </section>
             )}
 
             {/* Step list */}

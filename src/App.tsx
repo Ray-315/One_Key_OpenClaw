@@ -3,6 +3,8 @@ import { Sidebar } from "./components/common/Sidebar";
 import { EnvCheckPage } from "./pages/EnvCheckPage";
 import { LogPage } from "./pages/LogPage";
 import { DeployPage } from "./pages/DeployPage";
+import { DashboardPage } from "./pages/DashboardPage";
+import { TaskFlowPage } from "./pages/TaskFlowPage";
 
 function App() {
   return (
@@ -10,8 +12,10 @@ function App() {
       <Sidebar />
       <main className="flex-1 overflow-hidden">
         <Routes>
-          <Route path="/" element={<EnvCheckPage />} />
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/env" element={<EnvCheckPage />} />
           <Route path="/deploy" element={<DeployPage />} />
+          <Route path="/flow" element={<TaskFlowPage />} />
           <Route path="/log" element={<LogPage />} />
         </Routes>
       </main>
