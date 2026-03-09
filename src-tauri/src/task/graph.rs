@@ -59,15 +59,12 @@ impl TaskGraph {
         for step in steps {
             let to = node_map[&step.id];
             for dep_id in &step.depends_on {
-                let from = node_map.get(dep_id).ok_or_else(|| {
-                    AppError::RecipeParseError {
+                let from = node_map
+                    .get(dep_id)
+                    .ok_or_else(|| AppError::RecipeParseError {
                         path: String::new(),
-                        message: format!(
-                            "step '{}' depends on unknown step '{}'",
-                            step.id, dep_id
-                        ),
-                    }
-                })?;
+                        message: format!("step '{}' depends on unknown step '{}'", step.id, dep_id),
+                    })?;
                 graph.add_edge(*from, to, ());
             }
         }
@@ -85,7 +82,7 @@ impl TaskGraph {
     /// Return step IDs in a valid topological order.
     pub fn topological_order(&self) -> Vec<String> {
         toposort(&self.graph, None)
-            .unwrap_or_default()
+            .expect("task graph should remain acyclic after successful build")
             .into_iter()
             .map(|idx| self.graph[idx].clone())
             .collect()

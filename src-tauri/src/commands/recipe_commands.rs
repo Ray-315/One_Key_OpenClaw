@@ -1,3 +1,4 @@
+use std::time::Duration;
 use tauri::State;
 
 use crate::error::AppError;
@@ -16,10 +17,7 @@ pub fn list_recipes(state: State<'_, AppState>) -> Result<Vec<Recipe>, AppError>
 
 /// Load a recipe from a TOML file path and register it.
 #[tauri::command]
-pub fn load_recipe_file(
-    state: State<'_, AppState>,
-    path: String,
-) -> Result<Recipe, AppError> {
+pub fn load_recipe_file(state: State<'_, AppState>, path: String) -> Result<Recipe, AppError> {
     let mut registry = state
         .recipes
         .lock()
@@ -38,10 +36,7 @@ pub fn validate_recipe_cmd(
 
 /// Save (add or replace) a recipe in the registry.
 #[tauri::command]
-pub fn save_recipe(
-    state: State<'_, AppState>,
-    recipe: Recipe,
-) -> Result<(), AppError> {
+pub fn save_recipe(state: State<'_, AppState>, recipe: Recipe) -> Result<(), AppError> {
     let mut registry = state
         .recipes
         .lock()
@@ -52,10 +47,7 @@ pub fn save_recipe(
 
 /// Delete a recipe from the registry by ID.
 #[tauri::command]
-pub fn delete_recipe(
-    state: State<'_, AppState>,
-    recipe_id: String,
-) -> Result<(), AppError> {
+pub fn delete_recipe(state: State<'_, AppState>, recipe_id: String) -> Result<(), AppError> {
     let mut registry = state
         .recipes
         .lock()
@@ -68,16 +60,16 @@ const MAX_RECIPE_BODY_SIZE: usize = 1_024 * 1_024;
 
 /// Fetch a recipe from a remote URL and register it.
 #[tauri::command]
-pub async fn fetch_recipe_url(
-    state: State<'_, AppState>,
-    url: String,
-) -> Result<Recipe, AppError> {
+pub async fn fetch_recipe_url(state: State<'_, AppState>, url: String) -> Result<Recipe, AppError> {
     // Validate URL scheme – only allow HTTPS (and HTTP for localhost).
     let parsed = reqwest::Url::parse(&url)
         .map_err(|e| AppError::Anyhow(anyhow::anyhow!("invalid URL: {e}")))?;
     match parsed.scheme() {
         "https" => {}
-        "http" if parsed.host_str().map_or(false, |h| h == "localhost" || h == "127.0.0.1") => {}
+        "http"
+            if parsed
+                .host_str()
+                .map_or(false, |h| h == "localhost" || h == "127.0.0.1") => {}
         other => {
             return Err(AppError::Anyhow(anyhow::anyhow!(
                 "unsupported URL scheme '{other}': only HTTPS is allowed"
@@ -86,11 +78,21 @@ pub async fn fetch_recipe_url(
     }
 
     // Fetch with a size limit to prevent resource exhaustion.
-    let resp = reqwest::get(parsed)
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| AppError::Anyhow(anyhow::anyhow!("failed to build HTTP client: {e}")))?;
+
+    let resp = client
+        .get(parsed)
+        .send()
         .await
+        .and_then(reqwest::Response::error_for_status)
         .map_err(|e| AppError::Anyhow(anyhow::anyhow!("HTTP fetch failed: {e}")))?;
 
-    let content_length = resp.content_length().unwrap_or(0) as usize;
+    let content_length = resp.content_length().ok_or_else(|| {
+        AppError::Anyhow(anyhow::anyhow!("response missing Content-Length header"))
+    })? as usize;
     if content_length > MAX_RECIPE_BODY_SIZE {
         return Err(AppError::Anyhow(anyhow::anyhow!(
             "response too large ({content_length} bytes, max {MAX_RECIPE_BODY_SIZE})"

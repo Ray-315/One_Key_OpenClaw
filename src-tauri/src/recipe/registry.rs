@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use tokio::sync::mpsc;
@@ -88,11 +89,38 @@ impl RecipeRegistry {
 
     /// Fetch a recipe from a remote URL (must return TOML).
     pub async fn fetch_from_url(&mut self, url: &str) -> Result<Recipe, AppError> {
-        let resp = reqwest::get(url)
+        let parsed = reqwest::Url::parse(url)
+            .map_err(|e| AppError::Anyhow(anyhow::anyhow!("invalid URL: {e}")))?;
+        match parsed.scheme() {
+            "https" => {}
+            "http"
+                if parsed
+                    .host_str()
+                    .is_some_and(|h| h == "localhost" || h == "127.0.0.1") => {}
+            other => {
+                return Err(AppError::Anyhow(anyhow::anyhow!(
+                    "unsupported URL scheme '{other}': only HTTPS is allowed"
+                )));
+            }
+        }
+
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .map_err(|e| AppError::Anyhow(anyhow::anyhow!("failed to build HTTP client: {e}")))?;
+
+        let resp = client
+            .get(parsed)
+            .send()
             .await
+            .and_then(reqwest::Response::error_for_status)
             .map_err(|e| AppError::Anyhow(anyhow::anyhow!("HTTP fetch failed: {e}")))?;
 
-        if resp.content_length().unwrap_or(0) as usize > Self::MAX_BODY {
+        let content_length = resp.content_length().ok_or_else(|| {
+            AppError::Anyhow(anyhow::anyhow!("response missing Content-Length header"))
+        })? as usize;
+
+        if content_length > Self::MAX_BODY {
             return Err(AppError::Anyhow(anyhow::anyhow!("response too large")));
         }
 
@@ -151,7 +179,9 @@ impl RecipeRegistry {
             notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
                 if let Ok(event) = res {
                     for path in &event.paths {
-                        if path.extension().and_then(|e| e.to_str()) == Some("toml") {
+                        if path.starts_with(&dir_clone)
+                            && path.extension().and_then(|e| e.to_str()) == Some("toml")
+                        {
                             let file_stem = path
                                 .file_stem()
                                 .unwrap_or_default()
@@ -161,7 +191,6 @@ impl RecipeRegistry {
                         }
                     }
                 }
-                    let _ = &dir_clone;
             })
             .map_err(|e| AppError::Anyhow(anyhow::anyhow!("watcher error: {e}")))?;
 
