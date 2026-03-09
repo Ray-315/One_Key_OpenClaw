@@ -4,15 +4,14 @@ interface ProgressBarProps {
 }
 
 export function ProgressBar({ value, className = "" }: ProgressBarProps) {
-  const clamped = Math.max(0, Math.min(100, value));
-
+  const pct = Math.max(0, Math.min(100, value));
   return (
     <div
       className={`h-2 w-full overflow-hidden rounded-full bg-[var(--color-surface-hover)] ${className}`}
     >
       <div
         className="h-full rounded-full bg-[var(--color-primary)] transition-all duration-300"
-        style={{ width: `${clamped}%` }}
+        style={{ width: `${pct}%` }}
       />
     </div>
   );

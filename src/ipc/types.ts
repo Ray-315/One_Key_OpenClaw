@@ -1,5 +1,9 @@
 // TypeScript types matching Rust backend structures
 
+// ---------------------------------------------------------------------------
+// Environment types
+// ---------------------------------------------------------------------------
+
 export type EnvStatus =
   | { type: "ok" }
   | { type: "missing" }
@@ -24,6 +28,10 @@ export interface EnvItem {
   checkedAt: number;
 }
 
+// ---------------------------------------------------------------------------
+// Log types
+// ---------------------------------------------------------------------------
+
 export interface LogEntry {
   id: number;
   taskId: string;
@@ -34,7 +42,9 @@ export interface LogEntry {
   source: "stdout" | "stderr" | "system" | { pluginId: string };
 }
 
-// ─── Task types ──────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// Task / Step types
+// ---------------------------------------------------------------------------
 
 export type StepStatus =
   | { type: "pending" }
@@ -78,7 +88,9 @@ export interface Task {
   errorSummary?: string;
 }
 
-// ─── Recipe types ─────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// Recipe types
+// ---------------------------------------------------------------------------
 
 export interface EnvRequirement {
   envId: string;
@@ -86,10 +98,36 @@ export interface EnvRequirement {
   optional: boolean;
 }
 
-export interface RecipeMetadata {
-  createdAt?: string;
-  sourceUrl?: string;
-  checksum?: string;
+export type StepAction =
+  | {
+      type: "shell";
+      command: string;
+      args: string[];
+      env: Record<string, string>;
+    }
+  | { type: "packageInstall"; manager: string; packages: string[] }
+  | { type: "envCheck"; envId: string }
+  | { type: "download"; url: string; dest: string }
+  | { type: "extract"; src: string; dest: string };
+
+export interface RetryConfig {
+  maxAttempts: number;
+  delaySecs: number;
+  backoff: "fixed" | "exponential";
+}
+
+export type OnErrorStrategy = "fail" | "skip" | "retry";
+
+export interface RecipeStep {
+  id: string;
+  name: string;
+  description?: string;
+  action: StepAction;
+  dependsOn: string[];
+  condition?: string;
+  retry?: RetryConfig;
+  timeoutSecs?: number;
+  onError: OnErrorStrategy;
 }
 
 export interface Recipe {
@@ -103,34 +141,17 @@ export interface Recipe {
   envRequirements: EnvRequirement[];
   steps: RecipeStep[];
   vars: Record<string, string>;
-  metadata: RecipeMetadata;
 }
-
-export interface RecipeStep {
-  id: string;
-  name: string;
-  description?: string;
-  action: RecipeStepAction;
-  dependsOn: string[];
-  condition?: string;
-  timeoutSecs?: number;
-  onError: "fail" | "skip" | "retry";
-}
-
-export type RecipeStepAction =
-  | { type: "shell"; command: string; args: string[]; env: Record<string, string> }
-  | { type: "packageInstall"; manager: string; packages: string[] }
-  | { type: "envCheck"; envId: string }
-  | { type: "download"; url: string; dest: string }
-  | { type: "extract"; src: string; dest: string };
 
 export interface ValidationIssue {
   field: string;
   message: string;
-  severity: "Error" | "Warning";
+  severity: "error" | "warning";
 }
 
-// ─── Event payloads ──────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// Event payloads (backend → frontend push)
+// ---------------------------------------------------------------------------
 
 export interface TaskProgressEvent {
   taskId: string;
@@ -141,5 +162,5 @@ export interface TaskProgressEvent {
 export interface TaskStatusEvent {
   taskId: string;
   status: TaskStatus;
+  errorSummary?: string;
 }
-

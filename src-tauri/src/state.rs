@@ -1,28 +1,27 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+
+use tokio::sync::mpsc;
 
 use crate::env::prober::EnvItem;
-use crate::recipe::RecipeRegistry;
-use crate::task::engine::TaskHandle;
+use crate::recipe::registry::RecipeRegistry;
+use crate::task::engine::Task;
+use crate::task::state_machine::TaskControl;
 
 pub struct AppState {
     pub env_cache: Mutex<Vec<EnvItem>>,
-    pub recipe_registry: RecipeRegistry,
-    /// Active task handles keyed by task_id.
-    pub tasks: Mutex<HashMap<String, TaskHandle>>,
+    pub recipes: Mutex<RecipeRegistry>,
+    pub tasks: Mutex<HashMap<String, Arc<Mutex<Task>>>>,
+    pub task_controls: Mutex<HashMap<String, mpsc::Sender<TaskControl>>>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
-        let registry = RecipeRegistry::default();
-        if let Err(e) = registry.load_builtin() {
-            eprintln!("[AppState] Failed to load built-in recipes: {e}");
-        }
         Self {
             env_cache: Mutex::new(Vec::new()),
-            recipe_registry: registry,
+            recipes: Mutex::new(RecipeRegistry::with_builtins()),
             tasks: Mutex::new(HashMap::new()),
+            task_controls: Mutex::new(HashMap::new()),
         }
     }
 }
-

@@ -1,109 +1,41 @@
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRecipeStore } from "../store/recipeStore";
 import { useTaskStore } from "../store/taskStore";
+import { useTaskRunner } from "../hooks/useTaskRunner";
+import { useLogStream } from "../hooks/useLogStream";
 import { StepList } from "../components/task/StepList";
 import { ProgressBar } from "../components/task/ProgressBar";
-import { useTauriEvent } from "../hooks/useTauriEvent";
-import type {
-  TaskStatusEvent,
-  TaskProgressEvent,
-  TaskStep,
-  TaskStatus,
-} from "../ipc/types";
-
-function taskStatusLabel(status: TaskStatus): string {
-  switch (status) {
-    case "idle":
-      return "就绪";
-    case "running":
-      return "执行中";
-    case "paused":
-      return "已暂停";
-    case "success":
-      return "成功";
-    case "failed":
-      return "失败";
-    case "cancelled":
-      return "已取消";
-  }
-}
-
-function taskStatusClass(status: TaskStatus): string {
-  switch (status) {
-    case "running":
-      return "text-blue-400";
-    case "paused":
-      return "text-[var(--color-warning)]";
-    case "success":
-      return "text-[var(--color-success)]";
-    case "failed":
-      return "text-[var(--color-error)]";
-    case "cancelled":
-      return "text-[var(--color-text-muted)]";
-    default:
-      return "text-[var(--color-text-muted)]";
-  }
-}
+import { LogTerminal } from "../components/log/LogTerminal";
+import type { Recipe } from "../ipc/types";
 
 export function DeployPage() {
   const { recipes, loading: recipesLoading, loadRecipes } = useRecipeStore();
-  const {
-    tasks,
-    activeTaskId,
-    loading: taskLoading,
-    error,
-    start,
-    pause,
-    resume,
-    cancel,
-    applyStatusEvent,
-    applyProgressEvent,
-    applyStepUpdate,
-  } = useTaskStore();
+  const { tasks, activeTaskId, setActiveTask } = useTaskStore();
+  const { run, pause, resume, cancel } = useTaskRunner();
+
+  const [selectedRecipeId, setSelectedRecipeId] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
+  const [showLog, setShowLog] = useState(true);
 
   const activeTask = activeTaskId ? tasks[activeTaskId] : null;
 
-  // Controlled recipe selection.
-  const [selectedRecipeId, setSelectedRecipeId] = useState<string>("");
+  // Subscribe to log entries for the active task.
+  useLogStream(activeTaskId ?? undefined);
 
-  // Load recipes on mount.
   useEffect(() => {
     loadRecipes();
   }, [loadRecipes]);
 
-  // Default to first recipe once loaded.
+  // Auto-select first recipe.
   useEffect(() => {
-    if (recipes.length > 0 && !selectedRecipeId) {
+    if (!selectedRecipeId && recipes.length > 0) {
       setSelectedRecipeId(recipes[0].id);
     }
   }, [recipes, selectedRecipeId]);
 
-  // Subscribe to Tauri task events.
-  const handleStatus = useCallback(
-    (e: TaskStatusEvent) => applyStatusEvent(e),
-    [applyStatusEvent]
+  const selectedRecipe: Recipe | undefined = recipes.find(
+    (r) => r.id === selectedRecipeId
   );
-  const handleProgress = useCallback(
-    (e: TaskProgressEvent) => applyProgressEvent(e),
-    [applyProgressEvent]
-  );
-  const handleStepUpdate = useCallback(
-    (step: TaskStep) => applyStepUpdate(step),
-    [applyStepUpdate]
-  );
-
-  useTauriEvent<TaskStatusEvent>("task://status", handleStatus);
-  useTauriEvent<TaskProgressEvent>("task://progress", handleProgress);
-  useTauriEvent<TaskStep>("task://step-update", handleStepUpdate);
-
-  const handleStart = async () => {
-    if (!selectedRecipeId) return;
-    try {
-      await start(selectedRecipeId);
-    } catch {
-      // error is handled in the store
-    }
-  };
 
   const isRunning = activeTask?.status === "running";
   const isPaused = activeTask?.status === "paused";
@@ -112,125 +44,258 @@ export function DeployPage() {
     activeTask?.status === "failed" ||
     activeTask?.status === "cancelled";
 
+  async function handleDeploy() {
+    if (!selectedRecipeId) return;
+    setError(null);
+    try {
+      const taskId = await run(selectedRecipeId);
+      setActiveTask(taskId);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function handlePause() {
+    if (!activeTaskId) return;
+    try {
+      await pause(activeTaskId);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function handleResume() {
+    if (!activeTaskId) return;
+    try {
+      await resume(activeTaskId);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function handleCancel() {
+    if (!activeTaskId) return;
+    try {
+      await cancel(activeTaskId);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  function handleNewDeploy() {
+    setActiveTask(null);
+    setError(null);
+  }
+
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
+      {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-4">
         <h2 className="text-lg font-bold">一键部署</h2>
-
-        <div className="flex items-center gap-3">
-          {/* Recipe selector */}
-          {!activeTask || isFinished ? (
-            <select
-              className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
-              value={selectedRecipeId}
-              onChange={(e) => setSelectedRecipeId(e.target.value)}
-              disabled={recipesLoading}
-            >
-              {recipes.length === 0 ? (
-                <option value="">暂无配方</option>
-              ) : (
-                recipes.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))
-              )}
-            </select>
-          ) : null}
-
-          {/* Action buttons */}
-          {!activeTask || isFinished ? (
-            <button
-              onClick={handleStart}
-              disabled={taskLoading || !selectedRecipeId}
-              className="rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)] disabled:opacity-50"
-            >
-              {taskLoading ? "启动中..." : "开始部署"}
-            </button>
-          ) : (
-            <>
-              {isRunning && (
-                <button
-                  onClick={pause}
-                  className="rounded-md border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
-                >
-                  暂停
-                </button>
-              )}
-              {isPaused && (
-                <button
-                  onClick={resume}
-                  className="rounded-md bg-[var(--color-primary)] px-3 py-2 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)]"
-                >
-                  继续
-                </button>
-              )}
-              <button
-                onClick={cancel}
-                className="rounded-md border border-red-500/40 px-3 py-2 text-sm text-[var(--color-error)] hover:bg-red-500/10"
-              >
-                取消
-              </button>
-            </>
-          )}
-        </div>
+        {isFinished && (
+          <button
+            onClick={handleNewDeploy}
+            className="rounded-md px-3 py-1.5 text-sm text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-hover)]"
+          >
+            新建部署
+          </button>
+        )}
       </div>
 
-      {/* Error banner */}
-      {error && (
-        <div className="mx-6 mt-4 rounded-md bg-red-500/10 px-4 py-3 text-sm text-red-400">
-          {error}
-        </div>
-      )}
+      <div className="flex-1 overflow-auto p-6">
+        {/* ── Recipe selector (only when no active/running task) ── */}
+        {!activeTask && (
+          <section className="mb-6">
+            <label className="mb-2 block text-sm font-medium text-[var(--color-text-muted)]">
+              选择配方
+            </label>
+            <div className="flex gap-3">
+              <select
+                value={selectedRecipeId}
+                onChange={(e) => setSelectedRecipeId(e.target.value)}
+                disabled={recipesLoading}
+                className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+              >
+                {recipesLoading ? (
+                  <option>加载中...</option>
+                ) : (
+                  recipes.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                      {r.author ? ` — ${r.author}` : ""}
+                    </option>
+                  ))
+                )}
+              </select>
+              <button
+                onClick={handleDeploy}
+                disabled={!selectedRecipeId || recipesLoading}
+                className="rounded-md bg-[var(--color-primary)] px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-primary-hover)] disabled:opacity-50"
+              >
+                开始部署
+              </button>
+            </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-auto p-6 space-y-6">
-        {/* No task started yet */}
-        {!activeTask && !taskLoading && (
-          <div className="flex flex-col items-center justify-center py-16 text-[var(--color-text-muted)]">
-            <span className="text-5xl mb-4">🚀</span>
-            <p className="text-base">选择配方，点击「开始部署」</p>
+            {/* Recipe description */}
+            {selectedRecipe?.description && (
+              <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+                {selectedRecipe.description}
+              </p>
+            )}
+
+            {/* Env requirements */}
+            {selectedRecipe && selectedRecipe.envRequirements.length > 0 && (
+              <div className="mt-4">
+                <p className="mb-2 text-xs font-medium text-[var(--color-text-muted)]">
+                  前置要求
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {selectedRecipe.envRequirements.map((req) => (
+                    <span
+                      key={req.envId}
+                      className="rounded-full border border-[var(--color-border)] px-3 py-1 text-xs text-[var(--color-text-muted)]"
+                    >
+                      {req.envId}
+                      {req.version ? ` ${req.version}` : ""}
+                      {req.optional ? " (可选)" : ""}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── Error ──────────────────────────────────────────────── */}
+        {error && (
+          <div className="mb-4 rounded-md bg-red-500/10 px-4 py-3 text-sm text-red-400">
+            {error}
           </div>
         )}
 
+        {/* ── Active task ─────────────────────────────────────────── */}
         {activeTask && (
           <>
-            {/* Task status + progress */}
-            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-[var(--color-text)]">
+            {/* Task header */}
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-[var(--color-text)]">
                   {activeTask.name}
-                </span>
-                <span
-                  className={`text-sm font-medium ${taskStatusClass(activeTask.status)}`}
-                >
-                  {taskStatusLabel(activeTask.status)}
-                </span>
+                </h3>
+                <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+                  任务 ID: {activeTask.id.slice(0, 8)}…
+                </p>
               </div>
-
-              <ProgressBar value={activeTask.progress} />
-
-              <p className="text-xs text-[var(--color-text-muted)]">
-                总进度 {Math.round(activeTask.progress)}%
-                {activeTask.errorSummary && (
-                  <span className="ml-2 text-[var(--color-error)]">
-                    — {activeTask.errorSummary}
-                  </span>
-                )}
-              </p>
+              <TaskStatusBadge status={activeTask.status} />
             </div>
+
+            {/* Overall progress */}
+            <div className="mb-2 flex items-center justify-between text-xs text-[var(--color-text-muted)]">
+              <span>总进度</span>
+              <span>{Math.round(activeTask.progress)}%</span>
+            </div>
+            <ProgressBar value={activeTask.progress} className="mb-6" />
+
+            {/* Error summary */}
+            {activeTask.errorSummary && (
+              <div className="mb-4 rounded-md bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                {activeTask.errorSummary}
+              </div>
+            )}
 
             {/* Step list */}
-            <div>
-              <h3 className="mb-3 text-sm font-semibold text-[var(--color-text-muted)] uppercase tracking-wide">
+            <section className="mb-6">
+              <p className="mb-3 text-sm font-medium text-[var(--color-text-muted)]">
                 步骤进度
-              </h3>
+              </p>
               <StepList steps={activeTask.steps} />
-            </div>
+            </section>
+
+            {/* Control buttons */}
+            {!isFinished && (
+              <div className="mb-6 flex gap-3">
+                {isRunning && (
+                  <button
+                    onClick={handlePause}
+                    className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-hover)]"
+                  >
+                    ⏸ 暂停
+                  </button>
+                )}
+                {isPaused && (
+                  <button
+                    onClick={handleResume}
+                    className="rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)]"
+                  >
+                    ▶ 继续
+                  </button>
+                )}
+                <button
+                  onClick={handleCancel}
+                  className="rounded-md border border-red-500/40 px-4 py-2 text-sm text-red-400 transition-colors hover:bg-red-500/10"
+                >
+                  ✕ 取消
+                </button>
+              </div>
+            )}
+
+            {/* Log terminal */}
+            <section>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-sm font-medium text-[var(--color-text-muted)]">
+                  实时日志
+                </p>
+                <button
+                  onClick={() => setShowLog((v) => !v)}
+                  className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+                >
+                  {showLog ? "折叠" : "展开"}
+                </button>
+              </div>
+              {showLog && (
+                <div className="h-64 overflow-hidden rounded-lg border border-[var(--color-border)]">
+                  <LogTerminal />
+                </div>
+              )}
+            </section>
           </>
+        )}
+
+        {/* ── Empty state ──────────────────────────────────────────── */}
+        {!activeTask && !error && recipes.length === 0 && !recipesLoading && (
+          <div className="flex flex-col items-center justify-center py-16 text-[var(--color-text-muted)]">
+            <p className="text-4xl">📦</p>
+            <p className="mt-3 text-sm">暂无可用配方</p>
+          </div>
         )}
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helper: task status badge
+// ---------------------------------------------------------------------------
+
+function TaskStatusBadge({ status }: { status: string }) {
+  const cfg: Record<string, { label: string; cls: string }> = {
+    idle: { label: "等待", cls: "text-[var(--color-text-muted)]" },
+    running: {
+      label: "进行中",
+      cls: "bg-blue-500/20 text-blue-400",
+    },
+    paused: { label: "已暂停", cls: "bg-yellow-500/20 text-yellow-400" },
+    success: { label: "成功", cls: "bg-green-500/20 text-green-400" },
+    failed: { label: "失败", cls: "bg-red-500/20 text-red-400" },
+    cancelled: {
+      label: "已取消",
+      cls: "text-[var(--color-text-muted)]",
+    },
+  };
+  const { label, cls } = cfg[status] ?? { label: status, cls: "" };
+  return (
+    <span className={`rounded-full px-3 py-1 text-xs font-medium ${cls}`}>
+      {label}
+    </span>
   );
 }

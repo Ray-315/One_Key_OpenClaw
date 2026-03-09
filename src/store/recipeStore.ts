@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { Recipe } from "../ipc/types";
-import { listRecipes, loadRecipeFile, deleteRecipe } from "../ipc/recipeApi";
+import { listRecipes } from "../ipc/recipeApi";
 
 interface RecipeState {
   recipes: Recipe[];
@@ -8,8 +8,8 @@ interface RecipeState {
   error: string | null;
 
   loadRecipes: () => Promise<void>;
-  importFromFile: (path: string) => Promise<void>;
-  remove: (recipeId: string) => Promise<void>;
+  upsertRecipe: (recipe: Recipe) => void;
+  removeRecipe: (id: string) => void;
 }
 
 export const useRecipeStore = create<RecipeState>((set) => ({
@@ -27,24 +27,19 @@ export const useRecipeStore = create<RecipeState>((set) => ({
     }
   },
 
-  importFromFile: async (path) => {
-    try {
-      await loadRecipeFile(path);
-      // Reload the full list after importing.
-      const recipes = await listRecipes();
-      set({ recipes });
-    } catch (e) {
-      set({ error: String(e) });
-    }
-  },
+  upsertRecipe: (recipe) =>
+    set((state) => {
+      const idx = state.recipes.findIndex((r) => r.id === recipe.id);
+      if (idx >= 0) {
+        const updated = [...state.recipes];
+        updated[idx] = recipe;
+        return { recipes: updated };
+      }
+      return { recipes: [...state.recipes, recipe] };
+    }),
 
-  remove: async (recipeId) => {
-    try {
-      await deleteRecipe(recipeId);
-      const recipes = await listRecipes();
-      set({ recipes });
-    } catch (e) {
-      set({ error: String(e) });
-    }
-  },
+  removeRecipe: (id) =>
+    set((state) => ({
+      recipes: state.recipes.filter((r) => r.id !== id),
+    })),
 }));

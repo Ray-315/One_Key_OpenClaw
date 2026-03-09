@@ -1,8 +1,13 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-/// Top-level recipe document.
+// ---------------------------------------------------------------------------
+// Recipe top-level
+// ---------------------------------------------------------------------------
+
+/// A declarative deployment recipe.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Recipe {
@@ -17,27 +22,31 @@ pub struct Recipe {
     /// Target platforms: ["macos", "windows", "linux"] or ["*"].
     #[serde(default)]
     pub platforms: Vec<String>,
-    /// Environment prerequisites.
-    #[serde(default)]
+    /// Environment pre-checks.
+    #[serde(default, alias = "env_requirements")]
     pub env_requirements: Vec<EnvRequirement>,
-    /// Step definitions.
-    #[serde(default)]
+    /// Ordered step definitions.
     pub steps: Vec<RecipeStep>,
-    /// Recipe-level variables.
+    /// Recipe-level variables for substitution.
     #[serde(default)]
     pub vars: HashMap<String, String>,
-    #[serde(default)]
-    pub metadata: RecipeMetadata,
 }
 
+/// An environment item required by the recipe.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EnvRequirement {
+    #[serde(alias = "env_id")]
     pub env_id: String,
-    /// Semver constraint, e.g. ">=18.0.0".
+    /// Optional semver constraint, e.g. ">=18.0.0".
     pub version: Option<String>,
     #[serde(default)]
     pub optional: bool,
 }
+
+// ---------------------------------------------------------------------------
+// Recipe step
+// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,21 +54,27 @@ pub struct RecipeStep {
     pub id: String,
     pub name: String,
     pub description: Option<String>,
-    pub action: RecipeStepAction,
-    #[serde(default)]
+    pub action: StepAction,
+    /// Step IDs this step depends on (for DAG; ignored in Phase-2 serial mode).
+    #[serde(default, alias = "depends_on")]
     pub depends_on: Vec<String>,
-    /// Simple variable-expansion condition string (not evaluated in Phase 2).
+    /// Condition expression (future use).
     pub condition: Option<String>,
     pub retry: Option<RetryConfig>,
+    #[serde(alias = "timeout_secs")]
     pub timeout_secs: Option<u64>,
-    #[serde(default)]
+    #[serde(default, alias = "on_error")]
     pub on_error: OnErrorStrategy,
 }
 
-/// The action a step performs, serialised as a flattened TOML table.
+// ---------------------------------------------------------------------------
+// Step action
+// ---------------------------------------------------------------------------
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
-pub enum RecipeStepAction {
+pub enum StepAction {
+    /// Execute a shell command.
     Shell {
         command: String,
         #[serde(default)]
@@ -67,25 +82,72 @@ pub enum RecipeStepAction {
         #[serde(default)]
         env: HashMap<String, String>,
     },
+    /// Install packages via a package manager.
     PackageInstall {
-        manager: String,
+        manager: PackageManager,
         packages: Vec<String>,
     },
+    /// Assert that an environment item is available.
     EnvCheck {
+        #[serde(alias = "env_id")]
         env_id: String,
     },
+    /// Download a file.
     Download {
         url: String,
-        dest: String,
+        dest: PathBuf,
     },
+    /// Extract an archive.
     Extract {
-        src: String,
-        dest: String,
+        src: PathBuf,
+        dest: PathBuf,
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum PackageManager {
+    Npm,
+    Pip,
+    Cargo,
+    Brew,
+    Apt,
+    Winget,
+}
+
+// ---------------------------------------------------------------------------
+// Retry configuration
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RetryConfig {
+    #[serde(alias = "max_attempts")]
+    pub max_attempts: u8,
+    #[serde(default = "default_delay_secs", alias = "delay_secs")]
+    pub delay_secs: u64,
+    #[serde(default)]
+    pub backoff: BackoffStrategy,
+}
+
+fn default_delay_secs() -> u64 {
+    3
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum BackoffStrategy {
+    #[default]
+    Fixed,
+    Exponential,
+}
+
+// ---------------------------------------------------------------------------
+// Error strategy
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
 pub enum OnErrorStrategy {
     #[default]
     Fail,
@@ -93,108 +155,76 @@ pub enum OnErrorStrategy {
     Retry,
 }
 
+// ---------------------------------------------------------------------------
+// Recipe validation
+// ---------------------------------------------------------------------------
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RetryConfig {
-    pub max_attempts: u8,
-    #[serde(default)]
-    pub delay_secs: u64,
-    #[serde(default)]
-    pub backoff: BackoffStrategy,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub enum BackoffStrategy {
-    #[default]
-    Fixed,
-    Exponential,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct RecipeMetadata {
-    pub created_at: Option<String>,
-    pub source_url: Option<String>,
-    pub checksum: Option<String>,
-}
-
-/// A single validation issue found during recipe validation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ValidationIssue {
     pub field: String,
     pub message: String,
-    pub severity: ValidationSeverity,
+    pub severity: IssueSeverity,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ValidationSeverity {
+#[serde(rename_all = "lowercase")]
+pub enum IssueSeverity {
     Error,
     Warning,
 }
 
-impl Recipe {
-    /// Validate the recipe and return any issues found.
-    pub fn validate(&self) -> Vec<ValidationIssue> {
-        let mut issues = Vec::new();
+/// Validate a recipe and return any issues found.
+pub fn validate_recipe(recipe: &Recipe) -> Vec<ValidationIssue> {
+    let mut issues = Vec::new();
 
-        if self.version != "1" {
-            issues.push(ValidationIssue {
-                field: "version".to_string(),
-                message: format!("Unsupported recipe version '{}'; expected '1'", self.version),
-                severity: ValidationSeverity::Error,
-            });
-        }
-
-        if self.id.is_empty() {
-            issues.push(ValidationIssue {
-                field: "id".to_string(),
-                message: "Recipe id must not be empty".to_string(),
-                severity: ValidationSeverity::Error,
-            });
-        }
-
-        if self.name.is_empty() {
-            issues.push(ValidationIssue {
-                field: "name".to_string(),
-                message: "Recipe name must not be empty".to_string(),
-                severity: ValidationSeverity::Error,
-            });
-        }
-
-        if self.steps.is_empty() {
-            issues.push(ValidationIssue {
-                field: "steps".to_string(),
-                message: "Recipe must contain at least one step".to_string(),
-                severity: ValidationSeverity::Warning,
-            });
-        }
-
-        // Check for duplicate step ids.
-        let mut seen_ids = std::collections::HashSet::new();
-        for step in &self.steps {
-            if !seen_ids.insert(&step.id) {
-                issues.push(ValidationIssue {
-                    field: format!("steps[{}].id", step.id),
-                    message: format!("Duplicate step id '{}'", step.id),
-                    severity: ValidationSeverity::Error,
-                });
-            }
-        }
-
-        // Check depends_on references exist.
-        for step in &self.steps {
-            for dep in &step.depends_on {
-                if !self.steps.iter().any(|s| &s.id == dep) {
-                    issues.push(ValidationIssue {
-                        field: format!("steps[{}].dependsOn", step.id),
-                        message: format!(
-                            "Step '{}' depends on unknown step '{}'",
-                            step.id, dep
-                        ),
-                        severity: ValidationSeverity::Error,
-                    });
-                }
-            }
-        }
-
-        issues
+    if recipe.version.is_empty() {
+        issues.push(ValidationIssue {
+            field: "version".into(),
+            message: "version must not be empty".into(),
+            severity: IssueSeverity::Error,
+        });
     }
+    if recipe.id.is_empty() {
+        issues.push(ValidationIssue {
+            field: "id".into(),
+            message: "id must not be empty".into(),
+            severity: IssueSeverity::Error,
+        });
+    }
+    if recipe.name.is_empty() {
+        issues.push(ValidationIssue {
+            field: "name".into(),
+            message: "name must not be empty".into(),
+            severity: IssueSeverity::Error,
+        });
+    }
+    if recipe.steps.is_empty() {
+        issues.push(ValidationIssue {
+            field: "steps".into(),
+            message: "recipe must have at least one step".into(),
+            severity: IssueSeverity::Warning,
+        });
+    }
+
+    // Ensure step IDs are unique.
+    let mut seen_ids = std::collections::HashSet::new();
+    for (idx, step) in recipe.steps.iter().enumerate() {
+        if step.id.is_empty() {
+            issues.push(ValidationIssue {
+                field: format!("steps[{idx}].id"),
+                message: "step id must not be empty".into(),
+                severity: IssueSeverity::Error,
+            });
+        }
+        if !seen_ids.insert(step.id.clone()) {
+            issues.push(ValidationIssue {
+                field: format!("steps[{idx}].id"),
+                message: format!("duplicate step id: {}", step.id),
+                severity: IssueSeverity::Error,
+            });
+        }
+    }
+
+    issues
 }

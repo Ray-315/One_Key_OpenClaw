@@ -1,139 +1,72 @@
 import { create } from "zustand";
-import type { Task, TaskStep, TaskStatusEvent, TaskProgressEvent } from "../ipc/types";
-import {
-  startTask,
-  pauseTask,
-  resumeTask,
-  cancelTask,
-  getTask,
-  listTasks,
-} from "../ipc/taskApi";
+import type { Task, TaskStatus } from "../ipc/types";
+import { getTask, listTasks } from "../ipc/taskApi";
 
 interface TaskState {
   tasks: Record<string, Task>;
   activeTaskId: string | null;
-  loading: boolean;
-  error: string | null;
 
-  /** Load all tasks from backend */
+  setActiveTask: (id: string | null) => void;
+  upsertTask: (task: Task) => void;
+  updateTaskStatus: (
+    taskId: string,
+    status: TaskStatus,
+    errorSummary?: string
+  ) => void;
+  updateTaskProgress: (taskId: string, progress: number) => void;
   loadTasks: () => Promise<void>;
-  /** Start a task from a recipe */
-  start: (recipeId: string, vars?: Record<string, string>) => Promise<string>;
-  /** Pause the active task */
-  pause: () => Promise<void>;
-  /** Resume the active task */
-  resume: () => Promise<void>;
-  /** Cancel the active task */
-  cancel: () => Promise<void>;
-  /** Set the active task id */
-  setActiveTask: (taskId: string | null) => void;
-  /** Apply a status/progress event from Tauri */
-  applyStatusEvent: (event: TaskStatusEvent) => void;
-  applyProgressEvent: (event: TaskProgressEvent) => void;
-  applyStepUpdate: (step: TaskStep & { taskId?: string }) => void;
+  refreshTask: (taskId: string) => Promise<void>;
 }
 
 export const useTaskStore = create<TaskState>((set, get) => ({
   tasks: {},
   activeTaskId: null,
-  loading: false,
-  error: null,
+
+  setActiveTask: (id) => set({ activeTaskId: id }),
+
+  upsertTask: (task) =>
+    set((state) => ({
+      tasks: { ...state.tasks, [task.id]: task },
+    })),
+
+  updateTaskStatus: (taskId, status, errorSummary) =>
+    set((state) => {
+      const existing = state.tasks[taskId];
+      if (!existing) return state;
+      return {
+        tasks: {
+          ...state.tasks,
+          [taskId]: { ...existing, status, errorSummary },
+        },
+      };
+    }),
+
+  updateTaskProgress: (taskId, progress) =>
+    set((state) => {
+      const existing = state.tasks[taskId];
+      if (!existing) return state;
+      return {
+        tasks: { ...state.tasks, [taskId]: { ...existing, progress } },
+      };
+    }),
 
   loadTasks: async () => {
-    set({ loading: true, error: null });
     try {
-      const list = await listTasks();
-      const tasks: Record<string, Task> = {};
-      for (const t of list) tasks[t.id] = t;
-      set({ tasks, loading: false });
+      const tasks = await listTasks();
+      const map: Record<string, Task> = {};
+      for (const t of tasks) map[t.id] = t;
+      set({ tasks: map });
     } catch (e) {
-      set({ error: String(e), loading: false });
+      console.error("Failed to load tasks:", e);
     }
   },
 
-  start: async (recipeId, vars = {}) => {
-    set({ loading: true, error: null });
+  refreshTask: async (taskId) => {
     try {
-      const taskId = await startTask(recipeId, vars);
-      // Fetch the initial task snapshot.
       const task = await getTask(taskId);
-      set((s) => ({
-        tasks: { ...s.tasks, [taskId]: task },
-        activeTaskId: taskId,
-        loading: false,
-      }));
-      return taskId;
+      get().upsertTask(task);
     } catch (e) {
-      set({ error: String(e), loading: false });
-      throw e;
+      console.error("Failed to refresh task:", e);
     }
-  },
-
-  pause: async () => {
-    const { activeTaskId } = get();
-    if (!activeTaskId) return;
-    try {
-      await pauseTask(activeTaskId);
-    } catch (e) {
-      set({ error: String(e) });
-    }
-  },
-
-  resume: async () => {
-    const { activeTaskId } = get();
-    if (!activeTaskId) return;
-    try {
-      await resumeTask(activeTaskId);
-    } catch (e) {
-      set({ error: String(e) });
-    }
-  },
-
-  cancel: async () => {
-    const { activeTaskId } = get();
-    if (!activeTaskId) return;
-    try {
-      await cancelTask(activeTaskId);
-    } catch (e) {
-      set({ error: String(e) });
-    }
-  },
-
-  setActiveTask: (taskId) => set({ activeTaskId: taskId }),
-
-  applyStatusEvent: ({ taskId, status }) => {
-    set((s) => {
-      const task = s.tasks[taskId];
-      if (!task) return s;
-      return {
-        tasks: { ...s.tasks, [taskId]: { ...task, status } },
-      };
-    });
-  },
-
-  applyProgressEvent: ({ taskId, progress }) => {
-    set((s) => {
-      const task = s.tasks[taskId];
-      if (!task) return s;
-      return {
-        tasks: { ...s.tasks, [taskId]: { ...task, progress } },
-      };
-    });
-  },
-
-  applyStepUpdate: (updatedStep) => {
-    set((s) => {
-      // taskId must be provided in the step update or via activeTaskId.
-      const taskId = s.activeTaskId;
-      if (!taskId) return s;
-      const task = s.tasks[taskId];
-      if (!task) return s;
-      const steps = task.steps.map((st) =>
-        st.id === updatedStep.id ? { ...st, ...updatedStep } : st
-      );
-      return {
-        tasks: { ...s.tasks, [taskId]: { ...task, steps } },
-      };
-    });
   },
 }));

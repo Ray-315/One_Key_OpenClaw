@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 
 const navItems = [
   { to: "/", label: "🔍 环境检测", end: true },
-  { to: "/deploy", label: "🚀 一键部署", end: false },
+  { to: "/deploy", label: "🚀 部署", end: false },
   { to: "/log", label: "📝 日志", end: false },
 ];
 
