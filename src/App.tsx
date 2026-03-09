@@ -2,6 +2,7 @@ import { Routes, Route } from "react-router-dom";
 import { Sidebar } from "./components/common/Sidebar";
 import { EnvCheckPage } from "./pages/EnvCheckPage";
 import { LogPage } from "./pages/LogPage";
+import { DeployPage } from "./pages/DeployPage";
 
 function App() {
   return (
@@ -10,6 +11,7 @@ function App() {
       <main className="flex-1 overflow-hidden">
         <Routes>
           <Route path="/" element={<EnvCheckPage />} />
+          <Route path="/deploy" element={<DeployPage />} />
           <Route path="/log" element={<LogPage />} />
         </Routes>
       </main>
