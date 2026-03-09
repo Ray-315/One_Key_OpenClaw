@@ -150,6 +150,71 @@ export interface ValidationIssue {
 }
 
 // ---------------------------------------------------------------------------
+// Error diagnostic types (Phase 3)
+// ---------------------------------------------------------------------------
+
+export type ErrorCategory =
+  | "networkError"
+  | "permissionDenied"
+  | "missingDependency"
+  | "versionConflict"
+  | "diskSpace"
+  | "timeout"
+  | "unknown";
+
+export type FixAction =
+  | { type: "runCommand"; command: string; args: string[] }
+  | { type: "retryStep"; stepId: string }
+  | { type: "installEnv"; envId: string }
+  | { type: "openUrl"; url: string };
+
+export interface FixSuggestion {
+  title: string;
+  description: string;
+  action?: FixAction;
+}
+
+export interface ErrorRule {
+  id: string;
+  pattern: string;
+  description: string;
+  category: ErrorCategory;
+  suggestions: FixSuggestion[];
+}
+
+export interface DiagnosticReport {
+  taskId: string;
+  stepId: string;
+  rawError: string;
+  matchedRule?: ErrorRule;
+  suggestions: FixSuggestion[];
+  autoFixable: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// DAG graph types (Phase 3)
+// ---------------------------------------------------------------------------
+
+export interface TaskGraphNode {
+  id: string;
+  name: string;
+  description?: string;
+  layer: number;
+  dependsOn: string[];
+}
+
+export interface TaskGraphEdge {
+  id: string;
+  source: string;
+  target: string;
+}
+
+export interface TaskGraphData {
+  nodes: TaskGraphNode[];
+  edges: TaskGraphEdge[];
+}
+
+// ---------------------------------------------------------------------------
 // Event payloads (backend → frontend push)
 // ---------------------------------------------------------------------------
 

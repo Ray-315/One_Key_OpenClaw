@@ -1,0 +1,147 @@
+# Built-in error diagnostic rules.
+# Each rule provides a regex pattern matched against raw error output and
+# a list of human-readable fix suggestions.
+
+[[rules]]
+id = "npm_eacces"
+pattern = "EACCES: permission denied"
+description = "npm 安装时权限不足"
+category = "PermissionDenied"
+
+[[rules.suggestions]]
+title = "修复 npm 全局目录权限"
+description = "将 npm 全局目录改为当前用户可写的路径，无需 sudo。"
+[rules.suggestions.action]
+type = "openUrl"
+url = "https://docs.npmjs.com/resolving-eacces-permissions-errors-when-installing-packages-globally"
+
+[[rules.suggestions]]
+title = "使用 sudo 重试安装"
+description = "以管理员权限执行 npm install。"
+[rules.suggestions.action]
+type = "runCommand"
+command = "sudo"
+args = ["npm", "install", "-g"]
+
+# ---------------------------------------------------------------------------
+
+[[rules]]
+id = "network_timeout"
+pattern = "(ETIMEDOUT|ENOTFOUND|getaddrinfo|network timeout|timed out)"
+description = "网络连接超时或 DNS 解析失败"
+category = "NetworkError"
+
+[[rules.suggestions]]
+title = "重试该步骤"
+description = "网络问题通常是临时性的，稍后重试即可。"
+[rules.suggestions.action]
+type = "retryStep"
+stepId = "__current__"
+
+[[rules.suggestions]]
+title = "配置 npm 代理"
+description = "如果您在公司网络后面，请设置代理。"
+[rules.suggestions.action]
+type = "runCommand"
+command = "npm"
+args = ["config", "set", "proxy", "http://127.0.0.1:7890"]
+
+# ---------------------------------------------------------------------------
+
+[[rules]]
+id = "node_missing"
+pattern = "(node: command not found|'node' is not recognized|Cannot find module)"
+description = "Node.js 未安装或不在 PATH 中"
+category = "MissingDependency"
+
+[[rules.suggestions]]
+title = "安装 Node.js"
+description = "请前往 Node.js 官网下载并安装最新 LTS 版本。"
+[rules.suggestions.action]
+type = "openUrl"
+url = "https://nodejs.org/"
+
+[[rules.suggestions]]
+title = "安装 Node.js（macOS Homebrew）"
+description = "在 macOS 上使用 Homebrew 安装 Node.js。"
+[rules.suggestions.action]
+type = "runCommand"
+command = "brew"
+args = ["install", "node"]
+
+# ---------------------------------------------------------------------------
+
+[[rules]]
+id = "git_missing"
+pattern = "(git: command not found|'git' is not recognized)"
+description = "Git 未安装或不在 PATH 中"
+category = "MissingDependency"
+
+[[rules.suggestions]]
+title = "安装 Git"
+description = "请前往 Git 官网下载安装包。"
+[rules.suggestions.action]
+type = "openUrl"
+url = "https://git-scm.com/"
+
+[[rules.suggestions]]
+title = "安装 Git（macOS Homebrew）"
+description = "在 macOS 上使用 Homebrew 安装 Git。"
+[rules.suggestions.action]
+type = "runCommand"
+command = "brew"
+args = ["install", "git"]
+
+# ---------------------------------------------------------------------------
+
+[[rules]]
+id = "disk_full"
+pattern = "(ENOSPC|No space left on device|disk full)"
+description = "磁盘空间不足"
+category = "DiskSpace"
+
+[[rules.suggestions]]
+title = "清理磁盘空间"
+description = "删除不需要的文件或扩展磁盘容量后重试。"
+[rules.suggestions.action]
+type = "openUrl"
+url = "https://support.apple.com/en-us/HT206996"
+
+# ---------------------------------------------------------------------------
+
+[[rules]]
+id = "npm_version_conflict"
+pattern = "(ERESOLVE|peer dep|incompatible|version.*required)"
+description = "npm 包版本冲突"
+category = "VersionConflict"
+
+[[rules.suggestions]]
+title = "强制解决依赖冲突"
+description = "使用 --force 标志忽略版本冲突。"
+[rules.suggestions.action]
+type = "runCommand"
+command = "npm"
+args = ["install", "--force"]
+
+[[rules.suggestions]]
+title = "使用 legacy 解析模式"
+description = "使用旧版依赖解析模式。"
+[rules.suggestions.action]
+type = "runCommand"
+command = "npm"
+args = ["install", "--legacy-peer-deps"]
+
+# ---------------------------------------------------------------------------
+
+[[rules]]
+id = "command_timeout"
+pattern = "(timeout|Timeout|timed out after)"
+description = "命令执行超时"
+category = "Timeout"
+
+[[rules.suggestions]]
+title = "重试该步骤"
+description = "临时超时，稍后重试通常可以解决。"
+[rules.suggestions.action]
+type = "retryStep"
+stepId = "__current__"
